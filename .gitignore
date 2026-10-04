@@ -32,3 +32,6 @@
 
 # Private key
 keys/source-private.pem
+/keys/*
+/output/
+/.crypto-build/
