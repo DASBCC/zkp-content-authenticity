@@ -1,0 +1,95 @@
+{
+  "format": "content-authenticity-experiment-v1",
+  "runAt": "2026-10-30T20:32:19.098Z",
+  "network": "hardhatMainnet",
+  "chainId": "31337",
+  "ephemeral": true,
+  "artifactId": "03a340c17e3511faaf475e1c81c68aae74a964899b28a209acb82fddd8b0bc50",
+  "setup": {
+    "origin": "Powers of Tau generado localmente",
+    "trust": "Desarrollo: no acredita una ceremonia distribuida ni un setup de producción",
+    "participants": 1,
+    "resumed": false,
+    "power": 14,
+    "groth16ContributionHash": "b5052f4c9a6ef865c6c5687d15699990acd5fafe4c5ee7d9b262eb28c054615a8411dc9e7a774a2f03b77e4f62c541271e2cec0a556ab4f143259f841bc8be8d"
+  },
+  "contentHash": "6867663969263355147329599088068971092998094492073084578804689800832675853382",
+  "deployment": {
+    "format": "content-authenticity-deployment-v1",
+    "network": "hardhatMainnet",
+    "chainId": "31337",
+    "verifierAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "registryAddress": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    "owner": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    "artifactId": "03a340c17e3511faaf475e1c81c68aae74a964899b28a209acb82fddd8b0bc50",
+    "ephemeral": true,
+    "createdAt": "2026-10-30T20:32:17.543Z",
+    "transactions": {
+      "verifier": "0xf310e8dd4f4af823df7c6c72042f19dc72bd6cd4208b75a80309e5f28ded38e3",
+      "registry": "0xe82b4a362ecba6a044c3ce445f1c059bc14946608bf7512df3514dfa61b51f3e",
+      "root": "0xee4f8aba6d3b62f9de49cfbcff106b8f7b217d29773998ff1cca3b27aab33ff8"
+    },
+    "codeHashes": {
+      "verifier": "0x1305e6aa41e320d9e5e90fbe65c60918a7212efd2a01e1a481faa3f920f24e09",
+      "registry": "0xde97feb956a344d500fe4f4524421bb0661caea25b8c149ebaa5bd6d9fdc0769"
+    }
+  },
+  "publicSignals": [
+    "6867663969263355147329599088068971092998094492073084578804689800832675853382",
+    "1",
+    "10296921678656944797825760485606874990385018890857529721817902335829480030026",
+    "5499795891204486072553672973471631167413438235458157032648410670367455351004",
+    "1390849295786071768276380950238675083608645509734",
+    "31337",
+    "1324161310598743833836268493538283093091898295570",
+    "50360535517347656596214192851187233225966461402695475318446782001"
+  ],
+  "registration": {
+    "transactionHash": "0xfc3527e829b3bb54d65b1e37a1a9d2bb108f0605a8a4ed997ba4d069e695ddb8",
+    "contentHash": "6867663969263355147329599088068971092998094492073084578804689800832675853382",
+    "blockNumber": "5",
+    "verifierGasEstimate": "266938",
+    "proofAbiBytes": 256,
+    "registrationGas": "410717",
+    "confirmationMs": 5.971200000000408
+  },
+  "record": {
+    "contentHash": "6867663969263355147329599088068971092998094492073084578804689800832675853382",
+    "protocolVersion": "1",
+    "registrant": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "registeredAt": "1793392341",
+    "exists": true
+  },
+  "metrics": {
+    "compilationMs": 1481.9353999999998,
+    "constraints": 16324,
+    "wires": 16330,
+    "publicInputs": 8,
+    "privateInputs": 23,
+    "outputs": 0,
+    "sourceSha256": "f731de6e7a5e0a1cd60cb8d8073ed2d2be39f07f15f5950c1195956e2be7ea81",
+    "r1csSha256": "2e8f83c407a9203b7540cad4d39232499a4ddf6f044748210b0664d50fb55efa",
+    "setupMs": 42904.7111,
+    "setupResumed": false,
+    "hashingMs": 150.6414000000001,
+    "witnessMs": 84.75030000000015,
+    "proveMs": 301.38030000000026,
+    "verifyMs": 6.55199999999968,
+    "proofBytes": 722,
+    "verifierGas": "263846",
+    "verifierGasEstimate": "266938",
+    "proofAbiBytes": 256,
+    "registrationGas": "410717",
+    "confirmationMs": 5.971200000000408
+  },
+  "measurementContext": {
+    "node": "26.13.0",
+    "npm": "11.20.0",
+    "hardhat": "3.17.0",
+    "solidity": "0.8.34",
+    "evmVersion": "paris",
+    "buildProfile": "default",
+    "sourceReport": "metrics/runs/demo-1793392339098.json",
+    "observations": "Una ejecución local con minado automático; gas tomado de recibos y tiempos de reloj monotónico del proceso."
+  }
+}

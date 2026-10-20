@@ -35,3 +35,8 @@ keys/source-private.pem
 /keys/*
 /output/
 /.crypto-build/
+
+# Artefactos ZKP de gran tamaño, testigos privados y ejecuciones experimentales
+/.zk-artifacts/
+/metrics/runs/
+/data/

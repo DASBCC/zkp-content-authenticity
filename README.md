@@ -1,273 +1,331 @@
-# Autenticidad multimedia — Fase 1
+# Autenticidad multimedia — Fases 1 y 2
 
-Implementación criptográfica fuera de cadena para autenticar los bytes de imágenes, audio y video mediante Poseidon y firmas EdDSA sobre BabyJubJub. Permite generar claves de fuente, calcular huellas, construir autorizaciones, firmarlas, verificarlas y exportar entradas para Circom.
+Autenticación de archivos mediante Poseidon, firmas EdDSA/BabyJubJub, pertenencia a un conjunto de fuentes autorizadas y pruebas Groth16 verificadas por un registro EVM. La fuente firma fuera de cadena; el registro acepta el contenido cuando la prueba y su contexto cumplen las reglas del protocolo.
 
-Esta fase no requiere RPC, wallet, fondos ni aplicación web. Los contratos y la configuración Hardhat preexistentes se conservan.
+El proyecto usa Hardhat 3 y viem. Funciona localmente sin credenciales externas y tiene conexión configurable con Polygon Amoy. Esta fase deja módulos y comandos para una futura interfaz web.
 
-## Tecnologías y requisitos
+## Ejecutar el ensayo completo
 
-| Componente | Versión utilizada |
+Desde la raíz del proyecto, con Node y npm instalados:
+
+```shell
+npm ci
+npm run zk:setup
+npm run build
+npm test
+npm run zk:demo
+```
+
+`zk:demo` calcula la huella de `samples/prueba.txt`, genera una fuente temporal, construye el árbol, despliega ambos contratos, firma, genera una prueba real, la registra y consulta el archivo. Usa una cadena Hardhat aislada que termina al cerrar el comando. Devuelve `success: true` y guarda un informe en `metrics/runs/demo-<fecha>.json`. Puede repetirse sin administrar claves ni iniciar un nodo aparte.
+
+Para ensayar otro archivo:
+
+```shell
+npm run zk:demo -- --file samples/prueba-modificada.txt
+```
+
+La primera instalación requiere acceso a npm, GitHub por `forge-std` y la descarga de solc por Hardhat. Después, el setup local, las firmas, el prover y los ensayos Hardhat funcionan sin una testnet externa. El setup tarda más que una generación de prueba.
+
+## Herramientas y archivos
+
+Las versiones instaladas en la validación son las siguientes; `package-lock.json` fija la instalación reproducible con `npm ci`.
+
+| Herramienta | Versión |
 | --- | --- |
-| Node.js | 26.13.0 en la validación; mínimo 22.13.0 |
-| npm | 11.20.0 en la validación |
-| circomlibjs / circomlib | 0.1.7 / 2.0.5 |
-| circom2 | paquete 0.2.23; compilador Circom 2.2.3 en WASM |
+| Node.js / npm | 26.13.0 / 11.20.0; Node mínimo 22.13.0 |
+| circom2 / compilador Circom WASM | 0.2.23 / 2.2.3 |
+| circomlib / circomlibjs | 2.0.5 / 0.1.7 |
 | snarkjs | 0.7.6 |
 | Hardhat / toolbox viem | 3.17.0 / 5.0.7 |
-| TypeScript / viem | 6.0.3 / 2.56.8 |
+| viem / TypeScript / tsx | 2.56.8 / 6.0.3 / 4.23.13 |
+| Solidity / destino EVM | 0.8.34 / Paris |
+| forge-std | 1.16.2 |
 
-Se utiliza npm y se versiona package-lock.json. No hace falta instalar Circom globalmente, Rust ni un compilador nativo para ejecutar las pruebas criptográficas. Hardhat descarga Solidity en la primera compilación del contrato existente.
+No es necesario instalar Circom globalmente ni compilar Rust. El adaptador usa el compilador WASM incluido en `circom2` y rutas nativas de Node para Windows. Solidity conserva los perfiles default y production; ambos fijan Paris para evitar depender de instrucciones EVM más recientes. Production conserva el optimizador de 200 ejecuciones. Las mediciones incluidas utilizan el perfil default.
 
-Ed25519 fue reemplazado porque utiliza una curva y una construcción diferentes de EdDSAPoseidonVerifier. Sus claves PEM y firmas no son compatibles. La implementación usa exclusivamente buildEddsa(), prv2pub(), signPoseidon() y verifyPoseidon() de circomlibjs.
-
-BabyJubJub es una curva de Edwards sobre el campo escalar de BN254. Las claves públicas y R8 se intercambian como dos coordenadas; S es un escalar del subgrupo. Poseidon permite expresar las mismas relaciones mediante los componentes de circomlib.
-
-APIs verificadas: [circomlibjs 0.1.7](https://github.com/iden3/circomlibjs/tree/v0.1.7), [EdDSAPoseidonVerifier en circomlib 2.0.5](https://github.com/iden3/circomlib/blob/v2.0.5/circuits/eddsaposeidon.circom), [Hardhat 3](https://hardhat.org/llms.txt).
-
-## Instalación
-
-Desde la raíz del repositorio:
-
-~~~shell
-npm ci
-npm run build
-npm run crypto:test
-npm test
-~~~
-
-build compila el proyecto existente con Hardhat y ejecuta tsc --noEmit. crypto:test ejecuta todas las pruebas criptográficas, incluida la compilación Circom, generación de witness y comprobación de restricciones R1CS. test agrega la suite Hardhat preexistente.
-
-La instalación inicial necesita acceso a npm y GitHub por la dependencia existente forge-std. El hashing, las firmas, la verificación y las pruebas criptográficas no realizan llamadas de red.
-
-## Estructura
-
-~~~text
+```text
 src/
-  hashing.mjs                Hash de archivos, bytes y streams
-  poseidon.mjs               Instancia Poseidon compartida
-  authorization.mjs          Autorizaciones, paquetes y entradas del prover
-  eddsa.mjs                  Claves públicas y EdDSA/Poseidon
-  encoding.mjs               Campo, decimales, direcciones y JSON
-  key-management.mjs         Generación, validación y carga de secretos
+  hashing.mjs              Huella Poseidon de archivos, bytes y streams
+  poseidon.mjs             Instancia Poseidon compartida
+  encoding.mjs             Campo, direcciones y JSON canónico
+  key-management.mjs       Semillas EdDSA y carga de secretos
+  eddsa.mjs                Claves públicas y firmas BabyJubJub
+  authorization.mjs        Autorización y firma vinculada al contexto
+  protocol.mjs             Versión, dominio, rangos, nonce y nullifier
+  merkle.mjs               Conjunto autorizado, árbol y rutas
+  zkp.mjs                  Compilación, setup, testigo, prover y verificación
+  blockchain.ts            Despliegues, registro, consultas y mediciones
+circuits/
+  content-authenticity.circom
+contracts/
+  Groth16Verifier.sol      Generado por snarkjs
+  ContentRegistry.sol      Reglas de registro y administración de raíces
 scripts/
-  crypto-cli.mjs             CLI único: hash, keygen, authorization, sign, verify
-  send-op-tx.ts              Script preexistente
+  crypto-cli.mjs           Hash, claves, autorización, firma y verificación
+  sources-cli.mjs          Altas, cambios, bajas y rutas Merkle
+  zk-cli.mjs               Operaciones del circuito y Groth16
+  blockchain-cli.ts        Despliegue, raíz, registro, consulta y ensayo
 test/
-  hashing-authorization.test.mjs
-  eddsa.test.mjs             Firmas, claves y paquetes
-  integration.test.mjs       CLI y compatibilidad con Circom
-  fixtures.mjs               Utilidades de ensayo compartidas
-  circuits/authorization.circom
-  vectors/crypto-v1.json
-samples/
-  prueba.txt
-  prueba-modificada.txt
-  operation.json
-keys/                        Claves generadas, excluidas de Git
-output/                      Resultados locales, excluidos de Git
-contracts/                   Contrato preexistente
-hardhat.config.ts            Configuración preexistente
-~~~
+  *.test.mjs               Fase 1, Merkle y restricciones del circuito
+  blockchain.test.ts      Integración real y E2E
+  ContentRegistry.t.sol    Pruebas unitarias del contrato
+  vectors/crypto-v1.json   Vectores criptográficos de ensayo
+deployments/<chainId>/     Último despliegue e historial público por red
+metrics/baseline-local.json  Medición local conservada como referencia
+metrics/runs/              Informes nuevos, excluidos de Git
+.zk-artifacts/v1/          R1CS, WASM, claves, Powers of Tau y manifiesto
+keys/, output/, data/      Material local excluido de Git
+```
 
-## Protocolo de contentHash
+Los archivos de plantilla ajenos a esta integración se conservan. Los módulos propios tienen descripciones y comentarios en español. El verificador exportado mantiene la licencia, los comentarios y la matemática del generador.
 
-Se leen los bytes exactos sin decodificar ni transformar los formatos multimedia.
+## Relación demostrada y arquitectura
 
-1. Dividir en bloques consecutivos de 31 bytes.
-2. Completar solo el último bloque incompleto con 0x00 a la derecha.
-3. Interpretar cada bloque como entero unsigned big-endian.
-4. Inicializar el estado con la longitud original en bytes.
-5. Absorber cada bloque mediante Poseidon de dos entradas.
+```mermaid
+flowchart TD
+    A[Archivo multimedia] --> B[contentHash Poseidon]
+    B --> C[Autorización y contexto efectivo]
+    C --> D[Firma EdDSA de la fuente]
+    E[Conjunto autorizado] --> F[Raíz y ruta Merkle]
+    D --> G[Testigo privado del circuito]
+    F --> G
+    G --> H[Prueba Groth16 y ocho señales públicas]
+    H --> I[ContentRegistry comprueba contexto y uso único]
+    I --> J[Groth16Verifier generado]
+    J --> K[Registro confirmado y evento]
+```
 
-~~~text
-h0 = Poseidon(fileLength, block0)
-hi = Poseidon(hAnterior, blockActual)
-contentHash = hFinal
+El circuito reconstruye exactamente estas relaciones de la primera fase:
 
-archivo vacío: contentHash = Poseidon(0, 0)
-~~~
-
-Un múltiplo exacto de 31 no recibe un bloque adicional. Un archivo de un byte 0xab utiliza un bloque 0xab seguido de 30 bytes cero. La longitud original diferencia archivos que solo difieren en ceros finales. La decisión para el archivo vacío está fijada en los vectores y las pruebas.
-
-calculateContentHash lee buffers de 64 KiB sobre un único descriptor, mantiene un bloque de 31 bytes y devuelve BigInt. No acumula los bloques ni carga todo el archivo. Comprueba la longitud leída y cambios en tamaño/fechas del archivo durante la lectura. hashContentStream exige la longitud original y rechaza streams más cortos o largos.
-
-La firma y la verificación reutilizan la misma función. No se utiliza SHA-256 como huella principal.
-
-## Autorización y contexto
-
-Las relaciones y su orden exacto son:
-
-~~~text
+```text
 authorizationHash = Poseidon(contentHash, protocolVersion, sourceId, nonce)
-
-operationContext = Poseidon(
-    registrant, chainId, registryAddress, protocolDomain
-)
-
+operationContext = Poseidon(registrant, chainId, registryAddress, protocolDomain)
 signedAuthorizationHash = Poseidon(authorizationHash, operationContext)
-~~~
+leaf = Poseidon(sourceId, publicKeyX, publicKeyY)
+nullifier = Poseidon(sourceId, nonce, protocolVersion, chainId, registryAddress)
+```
 
-Se firma el elemento de campo signedAuthorizationHash con eddsa.signPoseidon(seed, eddsa.F.e(signedAuthorizationHash)). No se firma su texto decimal.
+Comprueba la firma de `signedAuthorizationHash` con `EdDSAPoseidonVerifier`, cuyo `enabled` está fijado a 1. Reconstruye la hoja y sus ocho niveles Merkle hasta la raíz pública, y exige que el nullifier calculado coincida con el presentado. La firma se produce con `circomlibjs` fuera del circuito. No se utiliza Ed25519.
 
-Codificación canónica:
+Orden exacto de `publicSignals`, compartido por el circuito, el prover y los contratos:
 
-- Campo p = 21888242871839275222246405745257275088548364400416034343698204186575808495617.
-- Escalar: 0 <= S < 2736030358979909402780800718157159386076813972158567259200215660948447373041.
-- La API acepta BigInt o cadenas decimales unsigned sin espacios, signo ni ceros iniciales, salvo el propio "0". Rechaza Number, notación exponencial y hexadecimal para valores de campo.
-- Los valores se validan antes de llamar a circomlibjs; nunca se reducen silenciosamente módulo p.
-- Las direcciones EVM tienen prefijo 0x y exactamente 40 dígitos hexadecimales. Se normalizan a minúsculas y se utiliza su entero unsigned de 160 bits en Poseidon.
-- chainId es positivo y menor que p.
-- El dominio de esta versión es el entero big-endian de los bytes ASCII de "zkp-content-authenticity:v1": 50360535517347656596214192851187233225966461402695475318446782001.
-- Todos los enteros de paquetes JSON y witness son cadenas decimales.
-- Coordenadas sin compresión: publicKey = [Ax, Ay], signature = { R8: [R8x, R8y], S }.
-- Claves públicas y R8 deben pertenecer al subgrupo BabyJubJub y no ser el punto neutro. Se rechazan estructuras con campos adicionales.
+```text
+[contentHash, protocolVersion, authorizedSourcesRoot, nullifier,
+ registrant, chainId, registryAddress, protocolDomain]
+```
 
-samples/operation.json especifica protocolVersion, sourceId, nonce y context. Sus direcciones y chainId son datos de ensayo. Para una operación posterior, el llamador debe proporcionar chainId y registryAddress obtenidos de la configuración efectiva de esa operación. Esta fase solo los procesa como datos criptográficos, sin conexiones ni valores de red implícitos. La verificación exige la operación esperada de manera independiente.
-
-Cada autorización debe usar un nonce único por fuente. Su consumo persistente y la asociación de sourceId con una clave de confianza corresponden a fases posteriores; la firma por sí sola no detecta la repetición de una operación idéntica.
-
-## Variables y claves
-
-La identidad de la fuente autorizada y una wallet EVM son independientes. La semilla EdDSA autoriza contenido y no se utiliza para firmar transacciones.
-
-~~~shell
-npm run crypto:keygen
-~~~
-
-Se crean keys/source-private.json y keys/source-public.json. La semilla se genera con node:crypto.randomBytes(32). El archivo privado contiene un identificador de formato y una semilla de 32 bytes en hexadecimal minúsculo sin prefijo 0x. No es un escalar de campo ni una clave PEM. El comando muestra solamente rutas y nunca sobrescribe archivos existentes.
-
-Para otras rutas:
-
-~~~shell
-npm run crypto:keygen -- --out keys/source-2-private.json --public-key keys/source-2-public.json
-~~~
-
-Usar --key para cargar el archivo privado. Alternativamente, SOURCE_EDDSA_PRIVATE_KEY acepta la semilla hexadecimal. Configurar ambos orígenes produce error. No se utilizan PRIVATE_KEY ni variables de wallet.
-
-.env.example contiene un marcador ficticio y comentarios de formato. Opcionalmente, copiarlo a .env y completar la semilla generada localmente. En PowerShell:
-
-~~~powershell
-Copy-Item .env.example .env
-~~~
-
-Node solo carga ese archivo si se solicita expresamente:
-
-~~~shell
-node --env-file=.env scripts/crypto-cli.mjs sign --file samples/prueba.txt --operation samples/operation.json --out output/authorization-env.json
-~~~
-
-.env y sus variantes, keys/, output/ y .crypto-build/ están excluidos de Git. Excluir cualquier otra ruta privada antes de generar secretos. Se solicita modo 0600 al crear archivos; en Windows deben usarse ACL apropiadas y evitar carpetas compartidas. Los archivos privados locales se guardan sin cifrado.
-
-La semilla no se imprime ni se añade al paquete, al prover, al witness o a una aplicación pública. Las funciones para generar/cargar secretos se importan separadamente desde src/key-management.mjs. Se limpian las copias temporales administradas por las funciones; JavaScript no garantiza borrado completo de memoria.
-
-## Comandos completos
-
-Ejecutar desde la raíz. Cada comando valida sus parámetros. Los archivos de salida se crean sin sobrescribir resultados anteriores: usar otra ruta al repetir una ejecución.
-
-~~~shell
-npm run crypto:hash -- --file samples/prueba.txt
-
-npm run crypto:keygen
-
-npm run crypto:authorization -- --file samples/prueba.txt --operation samples/operation.json --out output/base-authorization.json
-
-npm run crypto:sign -- --file samples/prueba.txt --operation samples/operation.json --key keys/source-private.json --out output/authorization.json
-
-npm run crypto:verify -- --file samples/prueba.txt --operation samples/operation.json --authorization output/authorization.json --public-key keys/source-public.json --witness output/witness-inputs.json
-
-npm run crypto:verify -- --file samples/prueba-modificada.txt --operation samples/operation.json --authorization output/authorization.json --public-key keys/source-public.json
-
-npm run crypto:test
-~~~
-
-La primera verificación devuelve valid: true. El archivo modificado devuelve valid: false y código 2. Los errores de argumentos, archivos, formatos o paquetes inconsistentes devuelven 1. El éxito devuelve 0. Todos los comandos admiten --help. Los nombres npm se conservan y delegan en un único archivo; también puede ejecutarse node scripts/crypto-cli.mjs --help.
-
-La clave de --public-key debe obtenerse de una fuente de confianza independiente. No basta confiar en la clave incluida en el paquete: cualquier persona puede generar un par y firmar contenido.
-
-La verificación recalcula los bytes, reconstruye los hashes, compara la operación esperada, compara la clave pública de confianza y verifica la firma. El paquete contiene format, authorization, publicKey y signature. El witness se exporta solo después de verificar contra la operación y la clave esperadas.
-
-## API para el prover y consumidores posteriores
-
-~~~javascript
-import {
-  signContentAuthorization,
-  verifyContentAuthorization,
-  serializeAuthorizationPackage,
-  deserializeAuthorizationPackage,
-  exportProverInputs,
-} from "./src/authorization.mjs";
-import { calculateContentHash } from "./src/hashing.mjs";
-import { loadPrivateKey } from "./src/key-management.mjs";
-
-const contentHash = await calculateContentHash(filePath);
-const seed = await loadPrivateKey({ filePath: privateKeyPath });
-try {
-  const signed = await signContentAuthorization({ contentHash, ...operation }, seed);
-  const json = await serializeAuthorizationPackage(signed);
-  const restored = await deserializeAuthorizationPackage(json);
-  const valid = await verifyContentAuthorization(restored, {
-    contentHash, operation, publicKey: trustedSourcePublicKey,
-  });
-  if (valid) {
-    const inputs = await exportProverInputs(restored);
-  }
-} finally {
-  seed.fill(0);
-}
-~~~
-
-| Función | Entrada y salida |
+| Clasificación | Valores |
 | --- | --- |
-| hashContentBytes(bytes) | Uint8Array -> Promise<BigInt> |
-| hashContentStream(chunks, fileLength) | Iterable/AsyncIterable de Uint8Array y longitud BigInt/decimal -> Promise<BigInt> |
-| calculateContentHash(path) | Archivo local -> Promise<BigInt> |
-| createAuthorization(input) | contentHash, protocolVersion, sourceId, nonce, context -> datos normalizados y tres hashes |
-| derivePublicKey(seed) | Semilla Uint8Array de 32 bytes -> coordenadas BigInt |
-| signAuthorizationHash(message, seed) | signedAuthorizationHash y semilla -> R8 y S BigInt |
-| verifyAuthorizationSignature(message, signature, publicKey) | Promise<boolean>; entradas mal formadas lanzan error |
-| serializeSignature / deserializeSignature | Firma validada <-> JSON decimal estable |
-| signContentAuthorization(input, seed) | Datos de autorización y semilla -> paquete firmado |
-| verifyContentAuthorization(package, expected) | Exige contentHash, operation y publicKey independientes |
-| serializeAuthorizationPackage / deserializeAuthorizationPackage | Validan esquema, representaciones y hashes internos |
-| exportVerifierInputs(message, signature, publicKey) | enabled, Ax, Ay, R8x, R8y, S y M como cadenas |
-| exportProverInputs(package) | Entradas del verificador más datos auxiliares |
+| Público | Los ocho valores anteriores, la prueba Groth16 y la raíz autorizada |
+| Privado en el testigo | sourceId, nonce, publicKeyX/Y, R8x/y, S, merklePathElements[8], merklePathIndices[8] |
+| Calculado internamente | authorizationHash, operationContext y signedAuthorizationHash |
+| Fuera del testigo | La semilla privada EdDSA y la clave de la billetera EVM |
 
-exportVerifierInputs asigna M = signedAuthorizationHash y enabled = "1". exportProverInputs agrega contentHash, protocolVersion, sourceId, nonce, registrant, chainId, registryAddress, protocolDomain, authorizationHash y operationContext, sin secretos.
+El circuito tiene ocho entradas públicas, 23 elementos privados y ninguna salida. El hash del archivo se calcula fuera del circuito: la prueba demuestra la autorización de esa huella, y quien consulta un archivo debe recalcularla sobre sus bytes.
 
-El circuito de prueba conecta estos datos con EdDSAPoseidonVerifier y comprueba las tres relaciones Poseidon. El circuito completo posterior deberá imponer las reglas de registro, rangos y confianza correspondientes. Esta fase no genera una prueba ZK completa de autenticidad ni verifica los bytes multimedia dentro del circuito de prueba.
+La blockchain conserva `contentHash`, versión, registrante, fecha y existencia, además del estado de nullifiers consumidos. No conserva la identidad de la fuente, su clave pública, la firma EdDSA ni la ruta Merkle. `ContentRegistered` emite solamente huella, registrante, versión y fecha.
 
-## Pruebas y vectores
+### Huella y codificación de la Fase 1
 
-~~~shell
-npm run crypto:test
+Se procesan los bytes originales del archivo, sin interpretar el formato multimedia: bloques de 31 bytes, último bloque incompleto con ceros a la derecha, entero big-endian y estado inicial igual a la longitud original. Cada bloque actualiza el estado mediante Poseidon de dos entradas. Un múltiplo de 31 no recibe otro bloque. El archivo vacío es exactamente `Poseidon(0, 0)`. La lectura usa búferes de 64 KiB y detecta cambios del archivo durante el procesamiento.
+
+El campo es `p = 21888242871839275222246405745257275088548364400416034343698204186575808495617`. Las APIs criptográficas reciben BigInt o cadenas decimales canónicas y rechazan `Number`, valores negativos, valores fuera del campo y reducciones silenciosas módulo p. En JSON se usan cadenas decimales; las direcciones del contexto usan `0x` y 40 dígitos hexadecimales, y el circuito recibe su entero de 160 bits.
+
+La versión es 1 y el dominio es el entero big-endian del ASCII `zkp-content-authenticity:v1`: `50360535517347656596214192851187233225966461402695475318446782001`. El circuito limita `chainId` a un entero positivo de 64 bits, las direcciones a 160 bits y `sourceId` a un elemento de campo positivo. Las claves y firmas de las APIs se validan sobre BabyJubJub y su subgrupo; `S` debe ser canónico.
+
+### Fuentes autorizadas y revocación
+
+El administrador decide qué relación fuente-clave merece confianza. El árbol tiene profundidad 8 y capacidad 256: ordena las fuentes numéricamente por `sourceId` ascendente, rechaza identificadores repetidos y llena las posiciones restantes con hojas cero. Cada padre es `Poseidon(izquierda, derecha)`. Las rutas se exportan desde la hoja hacia la raíz; índice 0 significa nodo actual a la izquierda e índice 1 a la derecha. Los índices son booleanos también dentro del circuito.
+
+`add`, `update` y `revoke` crean un conjunto nuevo. Al cambiar su contenido hay que publicar su nueva raíz y regenerar las rutas. El contrato admite **una sola raíz activa**: sustituirla invalida inmediatamente la anterior para registros nuevos. El propietario puede deshabilitarla o publicar otra; la propiedad se transfiere en dos pasos con aceptación del destinatario. No hay una función administrativa para registrar contenido sin prueba.
+
+Una revocación conserva los registros históricos. No borra registros anteriores ni demuestra que fueran fraudulentos. El archivo del conjunto y las rutas deben distribuirse por un canal adecuado: publicar la relación fuente-clave fuera de la prueba puede revelar la identidad que se pretende ocultar en cadena.
+
+### Uso único y contexto
+
+`chain:operation` genera un nonce privado con 31 bytes aleatorios, distinto de cero y menor que `2^248`. El circuito impone ese rango. Su nullifier es público y queda consumido solo después de superar todas las validaciones. Reutilizar el nonce de la misma fuente, versión, cadena y registro produce el mismo nullifier, aunque se cambie el contenido.
+
+El contrato comprueba los ocho elementos del campo, versión y dominio, raíz habilitada, `registrant == msg.sender`, `chainId == block.chainid`, dirección del registro, ausencia de contenido duplicado, nullifier disponible y verificación Groth16. Una prueba copiada por otra billetera falla por registrante; modificar ese dato invalida la prueba. Una prueba de otra cadena o contrato tampoco puede registrarse. Los intentos rechazados no crean registros ni consumen nullifiers.
+
+## Compilación, setup y artefactos
+
+```shell
+npm run zk:compile
+npm run zk:setup
+npm run zk:verifier
 npm run build
-npm test
-~~~
+```
 
-La suite cubre determinismo, cambio de un byte, vacío, tamaños 1/30/31/32/62, big-endian, padding, longitud, cortes de stream, archivos mayores de 2 MiB, datos base y contexto de autorización, firmas válidas/alteradas, claves incorrectas, serialización, secretos, comandos y rechazo de valores no canónicos.
+`zk:compile` produce R1CS, WASM, símbolos y estadísticas. `zk:setup` crea Powers of Tau de potencia 14 con una contribución local aleatoria, prepara su segunda fase, crea la clave Groth16, añade otra contribución, comprueba su correspondencia con R1CS y exporta `verification_key.json` y `contracts/Groth16Verifier.sol`. `zk:verifier` comprueba los artefactos y muestra la ruta y el hash del verificador ya exportado.
 
-test/vectors/crypto-v1.json contiene bytes incrementales 0..61, hashes de frontera, una semilla pública exclusivamente de ensayo, clave derivada, firma y los tres hashes de autorización. Los resultados se fijaron directamente con circomlibjs 0.1.7. No utilizar esa semilla pública para autorizar contenido real.
+El Powers of Tau procede de esta ejecución local, con un participante. **Su nivel de confianza es de desarrollo**: no acredita una ceremonia distribuida ni debe presentarse como setup de producción. La entropía de las contribuciones no se imprime ni se guarda; esto tampoco convierte la ceremonia de una parte en una ceremonia de producción.
 
-La prueba Circom compila con el compilador WASM incluido, calcula un witness real y lo comprueba contra R1CS mediante snarkjs. Exige rechazo al alterar firma, mensaje o contexto. La prueba de integración utiliza rutas nativas de Node para que el compilador WASI escriba correctamente en Windows.
+El manifiesto `.zk-artifacts/v1/manifest.json` vincula versión, dominio, profundidad, orden público, versiones de herramientas, hashes del compilador y de los circuitos de circomlib y SHA-256 de circuito, entrada principal, R1CS, WASM, símbolos, PTau, zkey, verification key y verificador Solidity. `artifactId` identifica ese conjunto. SHA-256 se usa para integridad de artefactos; la huella multimedia sigue usando Poseidon. Un despliegue conserva su `artifactId` y hashes del bytecode. `chain:check` contrasta el código del verificador con el compilado y comprueba la configuración del registro.
 
-## Seguridad y límites pendientes
+Con artefactos válidos, `zk:setup` solo los comprueba. Para regenerar deliberadamente:
 
-La firma acredita que una clave autorizó unos bytes y un contexto. No establece por sí sola la veracidad del contenido ni la confianza de una fuente.
+```shell
+npm run zk:setup -- --force
+npm run build
+```
 
-Quedan para fases posteriores: gestión persistente de fuentes y nonces, circuito completo del protocolo, generación de pruebas ZK, integración del registro y aplicación web.
+Esto cambia las claves y el verificador: es necesario desplegar nuevamente y generar nuevas pruebas. No mezclar artefactos ni contratos de ceremonias diferentes. Si una ejecución se interrumpió pero ya existen PTau y zkey finales, `npm run zk:setup -- --resume` los comprueba contra el circuito antes de exportar y registra que su procedencia fue recuperada. No usar `--resume` junto con `--force`.
 
-La auditoría realizada durante esta implementación detectó 31 avisos en el árbol de dependencias instalado: 17 altos, 2 moderados y 12 bajos. Incluye dependencias transitivas de herramientas existentes y de snarkjs. Algunas soluciones propuestas requieren cambiar versiones mayores de Hardhat. Se conservan las versiones compatibles del proyecto; la actualización de ese árbol queda pendiente. Ejecutar npm audit para consultar su estado actual.
+Los archivos grandes están excluidos de Git; un clon ejecuta su propia ceremonia de desarrollo. El verificador generado se mantiene separado del registro y no se edita su matemática. El adaptador evita una fuga de descriptor de snarkjs 0.7.6 en la comprobación de H usando archivos en memoria durante esa comprobación, compatible con Node 26; no modifica dependencias ni ecuaciones.
 
-## Problemas habituales
+## Registro paso a paso en un nodo local
 
-| Problema | Solución |
+Estos comandos usan los módulos de la primera fase y el contexto real del despliegue. Los resultados y claves se crean sin sobrescribir: al repetirlos, elegir otros nombres o reutilizar conscientemente los archivos ya generados. Los nombres `phase2-*` se utilizaron en el ensayo de validación.
+
+En una terminal, mantener el nodo abierto:
+
+```shell
+npm run chain:node
+```
+
+En otra terminal, desde el mismo proyecto:
+
+```shell
+npm run crypto:keygen -- --out keys/phase2-private.json --public-key keys/phase2-public.json
+npm run zk:sources -- add --sources samples/sources-empty.json --source-id 1 --public-key keys/phase2-public.json --out output/phase2-sources.json
+npm run zk:sources -- build --sources output/phase2-sources.json
+npm run chain:deploy -- --network localhost --sources output/phase2-sources.json
+npm run chain:config -- --network localhost
+npm run chain:check -- --network localhost
+```
+
+El despliegue espera confirmaciones de Verifier y Registry y publica la raíz. Guarda direcciones y transacciones reales en `deployments/31337/localhost.json` y una copia en `history/`. Sin `--sources` ni raíz configurada, el despliegue deja el registro sin autorización habilitada hasta ejecutar `chain:root`.
+
+Crear una operación con el identificador de cadena, la dirección de contrato, el dominio y la billetera efectiva; firmar el archivo y generar su prueba:
+
+```shell
+npm run chain:operation -- --network localhost --source-id 1 --out output/phase2-operation.json
+npm run crypto:sign -- --file samples/prueba.txt --operation output/phase2-operation.json --key keys/phase2-private.json --out output/phase2-authorization.json
+npm run zk:sources -- proof --sources output/phase2-sources.json --source-id 1 --out output/phase2-membership.json
+npm run zk:sources -- verify --input output/phase2-membership.json
+npm run zk:inputs -- --authorization output/phase2-authorization.json --membership output/phase2-membership.json --out output/phase2-inputs.json
+npm run zk:witness -- --input output/phase2-inputs.json --out output/phase2-witness.wtns
+npm run zk:prove -- --input output/phase2-inputs.json --out output/phase2-proof.json
+npm run zk:verify -- --input output/phase2-proof.json
+npm run chain:register -- --network localhost --input output/phase2-proof.json --out output/phase2-receipt.json
+```
+
+`zk:inputs` valida firma y pertenencia y añade el nullifier. El paquete, la ruta, las entradas y el `.wtns` contienen información privada del protocolo: conservarlos localmente. `zk:prove` genera su propio testigo en memoria, por lo que la exportación con `zk:witness` es opcional. El archivo de prueba contiene solamente prueba, señales públicas, identificador de artefactos, métricas y coordenadas preparadas para Solidity. El adaptador aplica el orden de `pi_b` requerido por snarkjs; no se debe intercambiar a mano.
+
+La wallet que envía el registro debe ser el `registrant` firmado. `chain:operation` permite `--registrant 0x...` si otra billetera va a registrar; esa cuenta debe estar disponible en la conexión que envía la transacción. La muestra `samples/operation.json` pertenece a los vectores de Fase 1 y no reemplaza una operación leída del despliegue real.
+
+### Consultar posteriormente
+
+```mermaid
+flowchart LR
+    A[Archivo recibido] --> B[Recalcular contentHash Poseidon]
+    B --> C[Consultar ContentRegistry]
+    C --> D{Existe registro}
+    D -->|Sí| E[Registrante, versión y fecha]
+    D -->|No| F[Contenido sin registro en ese contrato]
+```
+
+```shell
+npm run chain:query -- --network localhost --file samples/prueba.txt
+npm run chain:query -- --network localhost --file samples/prueba-modificada.txt
+```
+
+La primera consulta devuelve `record.exists: true`; la segunda devuelve `false` tras el ensayo anterior. También se admite `--hash <decimal>` en lugar de `--file`. La consulta usa un cliente público y no necesita semilla EdDSA, wallet, testigo ni una nueva ZKP.
+
+El nodo local pierde el estado al cerrarse. Los JSON de despliegue no restauran la cadena. Después de reiniciarlo, desplegar nuevamente, crear una operación para el contrato efectivo y repetir el registro. El ensayo `zk:demo` utiliza su propia cadena y no deja un despliegue consultable por `localhost`.
+
+### Administrar fuentes
+
+```shell
+npm run zk:sources -- update --sources output/phase2-sources.json --source-id 1 --public-key keys/phase2-public.json --out output/phase2-updated-sources.json
+npm run chain:root -- --network localhost --sources output/phase2-updated-sources.json
+npm run zk:sources -- revoke --sources output/phase2-updated-sources.json --source-id 1 --out output/phase2-revoked-sources.json
+npm run chain:root -- --network localhost --sources output/phase2-revoked-sources.json
+npm run chain:disable-root -- --network localhost
+```
+
+Para rotar una clave, `--public-key` debe señalar el nuevo archivo público. Actualizar con la misma clave conserva la raíz. `chain:root` acepta también `--root <decimal>` o `AUTHORIZATION_ROOT`; las opciones explícitas tienen prioridad. Publicar una raíz habilita ese conjunto. Estas operaciones requieren la wallet propietaria. Tras revocar, las fuentes restantes deben recibir sus nuevas rutas; los registros ya confirmados continúan disponibles.
+
+## Variables y Polygon Amoy
+
+Crear `.env` a partir de `.env.example` si todavía no existe y completar únicamente las variables necesarias. La configuración Hardhat carga `.env`; el CLI criptográfico de Fase 1 solo lo carga si Node recibe `--env-file=.env`. Mantener `SOURCE_EDDSA_PRIVATE_KEY` vacío al usar `--key` evita fuentes de secreto ambiguas.
+
+| Variable | Uso |
 | --- | --- |
-| EEXIST al crear claves/resultados | Elegir una ruta nueva; no sobrescribir claves privadas. |
-| Falta la clave de fuente | Pasar --key o cargar SOURCE_EDDSA_PRIVATE_KEY, nunca ambos. |
-| Formato de clave incompatible | Generar una semilla con crypto:keygen; no usar PEM Ed25519 anteriores. |
-| Decimal no canónico | Usar cadenas unsigned sin 0x, espacios ni ceros iniciales; evitar Number. |
-| valid: false | Comprobar bytes, clave pública de confianza, nonce y contexto completo. |
-| El archivo cambió durante el hashing | Leer un archivo que permanezca estable durante el procesamiento. |
-| Solidity no disponible | La primera compilación Hardhat necesita descargar solc y escribir su caché. |
-| Circom global no encontrado | crypto:test usa el compilador WASM fijado en package-lock.json. |
-| .env no se carga | Usar node --env-file=.env; npm no carga .env automáticamente. |
+| SOURCE_EDDSA_PRIVATE_KEY | Semilla de fuente de 32 bytes hexadecimales; alternativa a `--key` |
+| BLOCKCHAIN_NETWORK | Red predeterminada; `localhost` si no se configura |
+| RPC_URL / CHAIN_ID | Nodo local; valores predeterminados `http://127.0.0.1:8545` y 31337 |
+| AMOY_RPC_URL | Proveedor de Polygon Amoy; valor público predeterminado `https://polygon-amoy.drpc.org` |
+| DEPLOYER_PRIVATE_KEY | Clave EVM secp256k1 de 32 bytes, con o sin `0x`; independiente de la semilla EdDSA |
+| VERIFIER_ADDRESS / REGISTRY_ADDRESS | Opcionales; deben coincidir con las direcciones del despliegue guardado de la red elegida |
+| AUTHORIZATION_ROOT | Raíz Poseidon decimal opcional para despliegue o administración |
+
+Los comandos admiten `--network` y `--deployment <archivo.json>`. Se comprueba que el identificador informado por el RPC coincide con la configuración. Amoy fija `chainId = 80002`; la variable `CHAIN_ID` se aplica a localhost. Las redes hardhatMainnet, hardhatOp y sepolia preexistentes se conservan.
+
+La conexión toma como referencia la configuración de `../blockchain-gr40-escrow`: proveedor `AMOY_RPC_URL` y normalización de la clave EVM. Se adapta a Hardhat 3 y viem del proyecto actual, sin trasladar contratos escrow ni sus secretos. Aquí la clave EVM se denomina `DEPLOYER_PRIVATE_KEY`.
+
+Para desplegar en Amoy, configurar el RPC y una wallet de desarrollo con POL de prueba y ejecutar:
+
+```shell
+npm run chain:deploy -- --network amoy --sources output/phase2-sources.json
+npm run chain:config -- --network amoy
+npm run chain:check -- --network amoy
+npm run chain:operation -- --network amoy --source-id 1 --out output/amoy-operation.json
+```
+
+El archivo real quedará en `deployments/80002/amoy.json`. Repetir firma, ruta, entradas y prueba con esa operación y nombres de salida nuevos; luego usar `chain:register --network amoy` y `chain:query --network amoy`. Una prueba de localhost no se reutiliza en Amoy. Esta entrega comprobó los despliegues locales y consultó el RPC público de Amoy, que respondió `eth_chainId = 0x13882` (80002). No se ejecutó ni se atribuye un despliegue en Amoy.
+
+Las consultas no necesitan `DEPLOYER_PRIVATE_KEY`. Dejar direcciones opcionales vacías permite utilizar directamente el archivo de despliegue. Si se completan, el programa exige coincidencia para evitar operar accidentalmente sobre otro contrato.
+
+## Pruebas, métricas y límites
+
+```shell
+npm run crypto:test
+npm run zk:test
+npm run chain:test
+npm test
+```
+
+La suite completa ejecutada pasó **91 pruebas: 16 Solidity y 75 Node**. Comprueba los vectores y comandos de Fase 1, Merkle, entradas privadas, firma y rutas alteradas, límites, señales públicas modificadas, pruebas Groth16 reales, integridad de artefactos, duplicados, nullifier consumido, copia por otro registrante, otra cadena o contrato, revocación, conservación histórica y ausencia de cambios de estado al fallar. El E2E usa los contratos y el verificador generado reales.
+
+`metrics/baseline-local.json` conserva una medición local y su `artifactId`. `zk:demo` y el E2E generan nuevos informes en `metrics/runs/`. Las métricas incluyen restricciones y compilación, setup, hashing, testigo, generación de prueba, verificación local, tamaño de prueba, gas y confirmación. Los tiempos dependen del equipo y de la carga; no son una garantía de rendimiento.
+
+| Medición local de referencia | Resultado |
+| --- | --- |
+| Restricciones / señales públicas / salidas | 16 324 / 8 / 0 |
+| Compilación Circom / setup | 1 481,94 ms / 42 904,71 ms |
+| Testigo / prueba / verificación fuera de cadena | 84,75 ms / 301,38 ms / 6,55 ms |
+| Prueba JSON / coordenadas ABI | 722 bytes / 256 bytes |
+| Gas del verificador / registro completo | 263 846 / 410 717 |
+| Confirmación local del registro | 5,97 ms |
+
+`proofBytes` mide el JSON de la prueba Groth16; `proofAbiBytes` mide las ocho coordenadas codificadas para Solidity, 256 bytes, sin señales públicas ni selector. `verifierGas` procede del recibo de una transacción de ensayo al verificador; `verifierGasEstimate` es la estimación RPC. `registrationGas` procede del recibo del registro e incluye su verificación interna. El ensayo realiza la transacción adicional del verificador para medirlo por separado. La confirmación local con minado automático no equivale a latencia o finalidad de Amoy.
+
+La firma acredita la autorización de una huella por una clave incluida en el conjunto aprobado. La confianza depende de cómo el administrador admite fuentes y protege su wallet. No demuestra la veracidad del contenido, no evita todas las filtraciones por metadatos y no garantiza anonimato frente al conjunto conocido, el momento del registro o información externa. Las imágenes, audio o video que cambien de codificación también cambian sus bytes y huella.
+
+Las claves y entradas privadas se guardan localmente sin cifrado. `.env`, `keys/`, `output/`, `data/`, testigos y artefactos grandes están excluidos de Git; utilizar también permisos adecuados del sistema y evitar publicar el conjunto de fuentes si debe mantenerse reservado. Las semillas públicas de `test/vectors/crypto-v1.json` son exclusivamente de ensayo. JavaScript no garantiza el borrado completo de secretos de memoria.
+
+No se incluyen una interfaz web ni una ceremonia de producción. Las actualizaciones de dependencias deben volver a validar los vectores y los artefactos; el módulo ZKP rechaza versiones criptográficas diferentes de las comprobadas. `npm audit` permite consultar el estado actual del árbol de dependencias.
+
+### Problemas habituales
+
+| Problema | Acción |
+| --- | --- |
+| PowerShell bloquea npm.ps1 | Usar `npm.cmd` como alternativa; utilizar la política de scripts que corresponda al entorno. |
+| EEXIST al crear resultados | Reutilizar el resultado existente o elegir otra ruta; los comandos no reemplazan claves. |
+| Faltan artefactos | Ejecutar `npm run zk:setup` y después `npm run build`. |
+| Artefacto incompatible o alterado | Revisar el cambio; regenerar con `zk:setup -- --force`, compilar, desplegar y probar de nuevo. |
+| Registro sin código o check fallido tras reiniciar | Desplegar en el nodo que está funcionando; un archivo JSON no restaura sus contratos. |
+| WrongRegistrant, WrongChain o WrongRegistry | Crear la operación con el despliegue y la cuenta efectivos y volver a firmar y probar. |
+| UnauthorizedRoot | Consultar la raíz actual, obtener la pertenencia vigente y regenerar la prueba. |
+| NullifierAlreadyUsed | Crear una autorización nueva con nonce aleatorio; no reutilizar la anterior. |
+| ContentAlreadyRegistered | Consultar el registro existente; la misma huella solo se registra una vez por contrato. |
+| Falta wallet o fondos en Amoy | Configurar la clave EVM y fondos de prueba; las consultas públicas no los requieren. |
+| Direcciones de entorno no coinciden | Revisar VERIFIER_ADDRESS, REGISTRY_ADDRESS y el archivo de la red elegida. |
+| Decimal o clave inválidos | Usar cadenas canónicas y semillas generadas por `crypto:keygen`; no usar PEM ni claves EVM para EdDSA. |
+| valid: false | Comprobar archivo, clave de confianza, raíz, contexto y correspondencia de artefactos. |
+| El archivo cambia durante el hashing | Procesar una copia estable del archivo. |
+
+Las verificaciones inválidas devuelven código 2; los errores de ejecución o formato devuelven 1; el éxito devuelve 0. Una consulta con `exists: false` es una consulta correcta. Los cuatro CLI admiten `--help`.
+
+Referencias de las implementaciones: [circomlibjs 0.1.7](https://github.com/iden3/circomlibjs/tree/v0.1.7), [EdDSAPoseidonVerifier](https://github.com/iden3/circomlib/blob/v2.0.5/circuits/eddsaposeidon.circom), [snarkjs](https://github.com/iden3/snarkjs), [Hardhat 3](https://hardhat.org/llms.txt), [viem](https://viem.sh/llms.txt), [configuración del compilador Solidity](https://docs.soliditylang.org/en/latest/using-the-compiler.html), [RPC de Polygon Amoy](https://docs.polygon.technology/pos/reference/rpc-endpoints).

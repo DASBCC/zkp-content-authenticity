@@ -13,7 +13,32 @@
     "crypto:authorization": "node scripts/crypto-cli.mjs authorization",
     "crypto:sign": "node scripts/crypto-cli.mjs sign",
     "crypto:verify": "node scripts/crypto-cli.mjs verify",
-    "crypto:test": "node --test --test-concurrency=1 test/*.test.mjs"
+    "crypto:test": "node --test --test-concurrency=1 test/eddsa.test.mjs test/hashing-authorization.test.mjs test/integration.test.mjs",
+    "zk:compile": "node scripts/zk-cli.mjs compile",
+    "zk:setup": "node scripts/zk-cli.mjs setup",
+    "zk:sources": "node scripts/sources-cli.mjs",
+    "zk:inputs": "node scripts/zk-cli.mjs inputs",
+    "zk:witness": "node scripts/zk-cli.mjs witness",
+    "zk:prove": "node scripts/zk-cli.mjs prove",
+    "zk:verify": "node scripts/zk-cli.mjs verify",
+    "zk:verifier": "node scripts/zk-cli.mjs export-verifier",
+    "prezk:test": "npm run zk:setup",
+    "zk:test": "node --test --test-concurrency=1 test/merkle.test.mjs test/zkp.test.mjs",
+    "pretest": "npm run zk:setup && npm run build",
+    "prechain:test": "npm run zk:setup && npm run build",
+    "chain:test": "hardhat test nodejs test/blockchain.test.ts",
+    "chain:node": "hardhat node --network hardhatMainnet --hostname 127.0.0.1",
+    "prechain:deploy": "npm run zk:setup && npm run build",
+    "chain:deploy": "node --import tsx scripts/blockchain-cli.ts deploy",
+    "chain:root": "node --import tsx scripts/blockchain-cli.ts root",
+    "chain:disable-root": "node --import tsx scripts/blockchain-cli.ts disable",
+    "chain:config": "node --import tsx scripts/blockchain-cli.ts config",
+    "chain:check": "node --import tsx scripts/blockchain-cli.ts check",
+    "chain:operation": "node --import tsx scripts/blockchain-cli.ts operation",
+    "chain:register": "node --import tsx scripts/blockchain-cli.ts register",
+    "chain:query": "node --import tsx scripts/blockchain-cli.ts query",
+    "prezk:demo": "npm run zk:setup && npm run build",
+    "zk:demo": "node --import tsx scripts/blockchain-cli.ts demo"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ignition": "^3.1.8",
@@ -24,7 +49,8 @@
     "hardhat": "^3.17.0",
     "snarkjs": "0.7.6",
     "typescript": "~6.0.3",
-    "viem": "^2.56.8"
+    "viem": "^2.56.8",
+    "tsx": "4.23.13"
   },
   "dependencies": {
     "circomlib": "2.0.5",
