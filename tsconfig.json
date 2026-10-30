@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "lib": [
-      "es2023"
+      "es2023",
+      "DOM",
+      "DOM.Iterable"
     ],
     "module": "node20",
     "target": "es2023",
@@ -14,5 +16,15 @@
     "allowImportingTsExtensions": true,
     "allowJs": true,
     "checkJs": false
-  }
+  },
+  "exclude": [
+    "web",
+    "e2e",
+    "node_modules",
+    "dist",
+    ".crypto-build",
+    ".zk-artifacts",
+    ".local-web",
+    "playwright.config.ts"
+  ]
 }

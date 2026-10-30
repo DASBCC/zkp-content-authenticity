@@ -356,15 +356,18 @@ export async function formatSolidityProof(proof, publicSignals) {
 export async function generateProof(inputs, options = {}) {
   const manifest = await ensureZkArtifacts(options);
   const paths = artifactPaths(options);
+  options.onProgress?.("witness");
   const built = await buildWitness(inputs, paths);
   try {
     return await withCurve(/* Produce la prueba real y mide la verificación fuera de cadena. */ async () => {
+      options.onProgress?.("proving");
       const proveStart = performance.now();
       const { proof, publicSignals } = await groth16.prove(paths.zkey, built.memory);
       const proveMs = performance.now() - proveStart;
       const signals = normalizePublicSignals(publicSignals);
       if (JSON.stringify(signals) !== JSON.stringify(built.publicSignals)) throw new Error("El orden de señales públicas del circuito no coincide con el protocolo");
       const key = JSON.parse(await readFile(paths.verificationKey, "utf8"));
+      options.onProgress?.("verifying");
       const verifyStart = performance.now();
       if (!await groth16.verify(key, signals, proof)) throw new Error("La prueba generada no pudo verificarse");
       const verifyMs = performance.now() - verifyStart;

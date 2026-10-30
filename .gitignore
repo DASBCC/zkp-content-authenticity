@@ -40,3 +40,9 @@ keys/source-private.pem
 /.zk-artifacts/
 /metrics/runs/
 /data/
+
+# Entorno web privado, compilación y resultados de pruebas del navegador
+/.local-web/
+/web/dist/
+/playwright-report/
+/test-results/

@@ -41,7 +41,9 @@ export async function savePrivateKey(path, privateKey) {
   }
 }
 
-/** Carga la semilla desde un archivo o SOURCE_EDDSA_PRIVATE_KEY y rechaza usar ambos orígenes. */
+/** Carga la semilla desde un archivo o SOURCE_EDDSA_PRIVATE_KEY y rechaza usar ambos orígenes.
+ * @param {{filePath?: string, env?: Record<string, string | undefined>}} [options] Origen de archivo o variables de entorno permitidas.
+ */
 export async function loadPrivateKey({ filePath, env = process.env } = {}) {
   const secret = env.SOURCE_EDDSA_PRIVATE_KEY;
   if (filePath && secret) throw new Error("Configura solo un origen para la clave privada de fuente");
