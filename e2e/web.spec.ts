@@ -119,6 +119,8 @@ test("el selector conserva los despliegues y distingue una falla de conexión de
 /** Comprueba administración autenticada, alta y revocación reales, y el bloqueo de emisión por política. */
 test("administra fuentes y permisos íntegramente desde la interfaz", async ({ page }) => {
   await page.goto("/#administracion");
+  await expect(page.getByLabel("Importar un conjunto JSON")).toHaveCount(0);
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Usar cuenta experimental" }).click();
   await expect(page.getByRole("button", { name: /0xf39/ })).toBeVisible();
   await page.getByRole("button", { name: "Acceder al conjunto privado" }).click();
@@ -139,6 +141,7 @@ test("administra fuentes y permisos íntegramente desde la interfaz", async ({ p
   await expect(page.getByText("Raíz confirmada y conjunto sincronizado.", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Acceder al conjunto privado" }).click();
   await expect(page.getByText("Fuente 2", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: "test-results/administracion-sin-importacion.png", fullPage: true });
   await page.getByLabel("Permitir solicitudes de autorización").uncheck();
   await page.getByRole("button", { name: "Guardar permisos" }).click();
   await expect(page.getByText("Permisos de emisión actualizados.")).toBeVisible();

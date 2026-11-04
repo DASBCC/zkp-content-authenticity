@@ -103,7 +103,7 @@ export async function createApplication(connection: BlockchainConnection, runtim
       }
     } else if (action === "shutdown" && local && (await bootstrapOwner(connection)).toLowerCase() === canonical) {
       return canonical as Address;
-    } else if (["admin-prepare", "admin-commit", "admin-sources", "admin-change", "admin-policy", "diagnostics", "shutdown"].includes(action)) {
+    } else if (["admin-commit", "admin-sources", "admin-change", "admin-policy", "diagnostics", "shutdown"].includes(action)) {
       if ((await configuration()).owner.toLowerCase() !== canonical) throw new ServiceError("ADMIN_ONLY", "Esta operación requiere la cuenta administradora.", 403);
     } else throw new ServiceError("BAD_REQUEST", "La acción solicitada no existe.");
     return canonical as Address;
@@ -353,16 +353,6 @@ export async function createApplication(connection: BlockchainConnection, runtim
         const tree = await buildAuthorizedSourcesTree(sources);
         const planId = randomUUID();
         plans.set(planId, { address, sources: tree.sources, root: tree.root.toString(), sourceKeys, expires: Date.now() + JOB_TTL });
-        json(response, 200, { planId, root: tree.root, count: tree.sources.length });
-      } else if (request.method === "POST" && url.pathname === "/api/admin/prepare") {
-        const value = await body(request);
-        const address = await authenticate(value, "admin-prepare");
-        exactKeys(value.payload, ["sources"], "conjunto autorizado");
-        if (!runtime.sourcesFile) throw new ServiceError("ADMIN_UNAVAILABLE", "No hay un archivo de fuentes configurado para este servicio.", 409);
-        if (plans.size >= 8) throw new ServiceError("BUSY", "Hay demasiados conjuntos pendientes.", 429);
-        const tree = await buildAuthorizedSourcesTree(value.payload.sources);
-        const planId = randomUUID();
-        plans.set(planId, { address, sources: tree.sources, root: tree.root.toString(), expires: Date.now() + JOB_TTL });
         json(response, 200, { planId, root: tree.root, count: tree.sources.length });
       } else if (request.method === "POST" && url.pathname === "/api/admin/commit") {
         const value = await body(request);

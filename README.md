@@ -13,7 +13,7 @@ Requisito: Node.js 22.13 o posterior instalado. La primera preparación necesita
 3. La aplicación se abre normalmente en **http://127.0.0.1:5173**. Si ya estaba funcionando, se abre esa instancia.
 4. Pulsa **Usar cuenta experimental** para ensayar con una cuenta del nodo local, o **Conectar wallet** para usar una extensión EVM.
 5. En **Administración**, acepta el entorno experimental y pulsa **Preparar sistema local**. Se crean una fuente de desarrollo, contratos reales y la raíz autorizada.
-6. Utiliza **Registrar contenido** o **Verificar contenido**. La administración de fuentes, permisos, raíces y propiedad, las métricas y la validación completa están disponibles en el sitio.
+6. Utiliza **Registrar contenido** o **Verificar contenido**. La administración de fuentes, permisos, raíces y propiedad, junto con las métricas, está disponible en el sitio.
 
 La cuenta experimental utiliza firmas y transacciones reales de las cuentas desbloqueadas del nodo de desarrollo. Sus claves EVM y las claves privadas EdDSA permanecen fuera del navegador. El selector permite ensayar otras cuentas: inicialmente la cuenta 1 administra y puede solicitar autorizaciones. Las demás requieren permiso explícito. Este acceso experimental no está disponible en Amoy.
 
@@ -98,7 +98,7 @@ web/
     App.tsx                Navegación, cuenta y cadena
     Register.tsx           Registro y comprobantes públicos
     Verify.tsx             Consulta sin wallet
-    Admin.tsx              Preparación, fuentes, permisos y validación
+    Admin.tsx              Preparación, fuentes, permisos y propiedad
     Deployment.tsx         Despliegue y recuperación mediante wallet
     components.tsx         Archivos, mensajes y resultados
     services.ts            Hashing, permisos, prover y EVM
@@ -179,7 +179,7 @@ Profundidad 8, capacidad 256, orden numérico ascendente por sourceId, duplicado
 
 ## Fuentes autorizadas
 
-Administración permite altas, rotación, revocación e importación JSON. Primero se prepara una raíz candidata; la wallet propietaria la publica y el servicio sincroniza el conjunto privado solo después de comprobarla en cadena. Una fuente debe seguir incluida y disponer de una clave en el servicio para autorizar nuevos registros.
+Administración permite crear, rotar y revocar fuentes directamente desde el sitio. Primero se prepara una raíz candidata; la wallet propietaria la publica y el servicio sincroniza el conjunto privado solo después de comprobarla en cadena. Una fuente debe seguir incluida y disponer de una clave en el servicio para autorizar nuevos registros.
 
 Existe una sola raíz activa. Sustituirla invalida la anterior; puede deshabilitarse y reactivarse desde el sitio. La revocación conserva el historial y no demuestra fraude retrospectivo. La propiedad exige propuesta y aceptación desde cuentas distintas.
 
@@ -280,7 +280,7 @@ La consulta no necesita wallet, semilla, testigo ni otra prueba. Un resultado po
 
 ## Administración de fuentes
 
-El propietario autentica el acceso al conjunto, crea/rota/revoca fuentes, publica y sincroniza raíces, deshabilita/reactiva registros y edita los permisos de emisión. También propone o acepta administración y ejecuta la validación completa. Los controles visuales se complementan con autorización en API y contrato.
+El propietario autentica el acceso al conjunto, crea/rota/revoca fuentes, publica y sincroniza raíces, deshabilita/reactiva registros y edita los permisos de emisión. También propone o acepta la transferencia de administración. Los controles visuales se complementan con autorización en API y contrato.
 
 ## Requisitos previos
 
@@ -435,7 +435,7 @@ Resultado de la validación web: **17 pruebas de servicio/cliente y 9 E2E de nav
 
 Los E2E usan cadena 18545, servicio 5174 y directorios exclusivos bajo `.crypto-build/`. No reemplazan firmas ni contratos y no alteran fuentes del usuario. Capturas y trazas se excluyen de Git.
 
-**Ejecutar validación completa**, en Administración, construye el proyecto, ejecuta módulos/contratos y E2E, muestra los resultados y permite descargar el reporte. Prepara Chromium si falta; no requiere una terminal.
+Desde la terminal, ejecuta `npm run build`, `npm test`, `npm run web:test` y `npm run web:e2e`. Instala Chromium con `npx playwright install chromium` si hace falta.
 
 ## Métricas
 

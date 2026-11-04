@@ -77,6 +77,12 @@ test("rechaza cuentas sin permiso, administración ajena, orígenes externos y R
   assert.equal((await request("/api/challenges", { address: owner.account.address, action: "proof", payload: { contentHash: "11" } }, { Origin: "https://example.com" })).status, 403);
   assert.equal((await request("/rpc", { jsonrpc: "2.0", method: "eth_sendTransaction", params: [], id: 1 })).status, 403);
   assert.equal((await request("/api/local-wallet/connect", { experimental: true })).status, 403);
+  const removedImport = await request("/api/admin/prepare", { sources: [] });
+  assert.equal(removedImport.status, 404);
+  assert.equal(removedImport.value.error.code, "NOT_FOUND");
+  const removedPermission = await request("/api/challenges", { address: owner.account.address, action: "admin-prepare", payload: { sources: [] } });
+  assert.equal(removedPermission.status, 400);
+  assert.equal(removedPermission.value.error.code, "BAD_REQUEST");
 });
 
 /** Exige firma auténtica y consumo único del permiso, ligado al hash autorizado. */
@@ -150,12 +156,14 @@ test("la rotación conserva su nueva clave después de incorporar otra fuente", 
 /** Impide sincronizar una raíz no publicada y conserva el registro histórico tras revocar fuentes. */
 test("la administración requiere confirmación real de la nueva raíz antes de guardar el conjunto", async () => {
   const registry = await connection.viem.getContractAt("ContentRegistry", deployment.registryAddress);
-  const prepared = await request("/api/admin/prepare", await signed("admin-prepare", { sources: [] }));
-  assert.equal(prepared.status, 200);
-  const payload = { planId: prepared.value.planId };
-  assert.equal((await request("/api/admin/commit", await signed("admin-commit", payload))).status, 409);
-  await registry.write.setAuthorizedSourcesRoot([BigInt(prepared.value.root)]);
-  assert.equal((await request("/api/admin/commit", await signed("admin-commit", payload))).status, 200);
+  for (const sourceId of ["2", "1"]) {
+    const prepared = await request("/api/admin/change", await signed("admin-change", { kind: "revoke", sourceId }));
+    assert.equal(prepared.status, 200);
+    const payload = { planId: prepared.value.planId };
+    assert.equal((await request("/api/admin/commit", await signed("admin-commit", payload))).status, 409);
+    await registry.write.setAuthorizedSourcesRoot([BigInt(prepared.value.root)]);
+    assert.equal((await request("/api/admin/commit", await signed("admin-commit", payload))).status, 200);
+  }
   assert.equal((await queryContent(connection, deployment.registryAddress, "31")).exists, true);
   assert.equal((await request("/api/proofs", await signed("proof", { contentHash: "34" }))).value.error.code, "SOURCE_UNAVAILABLE");
 });
