@@ -232,6 +232,47 @@ Se exporta `Groth16Verifier.sol` desde la zkey final, preservando matemática y 
 
 `ContentRegistry` comprueba campo canónico, versión, dominio, raíz habilitada, `registrant == msg.sender`, `chainId == block.chainid`, dirección del registro, duplicados, nullifier y Groth16. Después consume la autorización y conserva huella, versión, cuenta, fecha y existencia. Los rechazos no modifican estado. Sus eventos son públicos; `getRecord` no requiere ZKP. No hay admisión administrativa que omita la prueba.
 
+## Referencia de funciones en Solidity y Circom
+
+El código JavaScript y TypeScript documenta las funciones junto a sus implementaciones. Esta referencia reúne las entradas y salidas del protocolo en Solidity y Circom para conservar los hashes de los artefactos Groth16 y el bytecode asociado a los despliegues.
+
+### Registro de contenido
+
+Las funciones y el modificador del registro se definen en [ContentRegistry.sol](contracts/ContentRegistry.sol).
+
+| Función | Descripción | Entradas | Salida o efecto |
+| --- | --- | --- | --- |
+| `constructor` | Inicializa el registro y su administración. | `verifierAddress`, dirección con código desplegado. La cuenta que despliega es `msg.sender`. | Fija el verificador y el propietario y emite `OwnershipTransferred`. |
+| `onlyOwner` | Restringe operaciones al administrador actual. | Sin parámetros. Compara `msg.sender` con `owner`. | Continúa la función protegida si coincide o revierte con `Unauthorized`. |
+| `setAuthorizedSourcesRoot` | Publica y habilita una raíz de fuentes. | `newRoot`, entero de campo distinto de cero. Requiere el propietario actual. | Guarda y habilita la raíz y emite `AuthorizedSourcesRootUpdated`. |
+| `disableAuthorizedSourcesRoot` | Suspende la admisión de nuevos registros. | Sin parámetros. Requiere el propietario actual. | Cambia `rootEnabled` a `false` y emite `AuthorizedSourcesRootDisabled`. |
+| `transferOwnership` | Propone una transferencia administrativa. | `newOwner`, dirección distinta de cero y del propietario actual. Requiere el propietario actual. | Guarda el propietario pendiente y emite `OwnershipTransferStarted`. |
+| `acceptOwnership` | Completa la transferencia administrativa. | Sin parámetros. Requiere que `msg.sender` sea el propietario pendiente. | Actualiza el propietario, limpia la propuesta y emite `OwnershipTransferred`. |
+| `register` | Valida la prueba, el contexto, la raíz y la disponibilidad de la huella y el nullifier. | Puntos de prueba `pA`, `pB`, `pC` y las ocho `publicSignals` en el orden del circuito. Usa el remitente, la cadena y el contrato actuales. | Guarda el registro, consume el nullifier y emite `ContentRegistered`. Revierte si una comprobación falla. |
+| `getRecord` | Consulta la evidencia pública de una huella. | `contentHash`, huella de contenido como `uint256`. | `ContentRecord` con huella, versión, registrante, fecha y `exists`. Si la huella está ausente, devuelve los valores iniciales del struct. |
+| `verifier`, `owner`, `pendingOwner` | Consultan las direcciones públicas del registro. | Sin parámetros. | Dirección del verificador, del propietario actual o del propietario pendiente, respectivamente. |
+| `authorizedSourcesRoot`, `rootEnabled` | Consultan el estado de la raíz. | Sin parámetros. | Raíz como `uint256` o indicador booleano de habilitación, respectivamente. |
+| `usedNullifiers` | Consulta si una autorización ya fue consumida. | Nullifier como `uint256`. | `true` si fue consumido y `false` en otro caso. |
+| `FIELD_MODULUS`, `PROTOCOL_VERSION`, `PROTOCOL_DOMAIN` | Exponen las constantes del protocolo. | Sin parámetros. | Módulo escalar, versión o dominio como `uint256`, respectivamente. |
+
+### Verificador Groth16
+
+`IGroth16Verifier.verifyProof` declara la misma operación que implementa el contrato generado. Las otras funciones de la tabla son internas al bloque de ensamblador. [Interfaz](contracts/ContentRegistry.sol), [verificador](contracts/Groth16Verifier.sol).
+
+| Función | Descripción | Entradas | Salida o efecto |
+| --- | --- | --- | --- |
+| `verifyProof` | Comprueba una prueba contra la clave de verificación incorporada. | `pA` y `pC`, dos coordenadas cada uno. `pB`, dos pares de coordenadas en el orden exportado por snarkjs. `publicSignals`, ocho elementos de campo ordenados. | `true` si la prueba es válida para esas señales y `false` si la comprobación falla. |
+| `checkField` | Comprueba el rango de una señal pública. | `v`, valor de la señal. | Continúa si `v < r`. Fuera de rango, termina `verifyProof` con `false`. |
+| `g1_mulAccC` | Multiplica un punto de G1 por un escalar y lo suma al acumulador. | `pR`, puntero al acumulador. `x` e `y`, coordenadas del punto. `s`, escalar. | Actualiza el punto en memoria. Si falla un precompilado, termina `verifyProof` con `false`. |
+| `checkPairing` | Construye la combinación lineal de la clave y comprueba la ecuación de emparejamiento. | Punteros en calldata a `pA`, `pB`, `pC` y `pubSignals`, más `pMem` para la memoria de trabajo. | `isOk`, indicador de éxito de la ecuación y de la llamada al precompilado. |
+
+### Plantillas de Circom
+
+| Plantilla | Descripción | Entradas | Salida o efecto |
+| --- | --- | --- | --- |
+| [`ContentAuthenticity`](circuits/content-authenticity.circom) | Comprueba que una fuente autorizó una huella para un contexto y que el nullifier corresponde a esa operación. | Parámetros `depth`, `version` y `domain`. Las ocho señales públicas se enumeran en [Circuitos Circom](#circuitos-circom). Recibe en privado `sourceId`, `nonce`, `publicKeyX`, `publicKeyY`, `R8x`, `R8y`, `S`, `merklePathElements` y `merklePathIndices`. | Sin señales de salida. El testigo debe satisfacer las restricciones de firma, pertenencia Merkle, contexto y nullifier. |
+| [`AuthorizationCompatibility`](test/circuits/authorization.circom) | Comprueba que las huellas y la firma calculadas en JavaScript satisfacen las mismas relaciones en Circom. | Sin parámetros de plantilla. Recibe `enabled`, `Ax`, `Ay`, `R8x`, `R8y`, `S`, `M`, `contentHash`, `protocolVersion`, `sourceId`, `nonce`, `registrant`, `chainId`, `registryAddress`, `protocolDomain`, `authorizationHash` y `operationContext`. | Sin señales de salida. Las restricciones exigen `enabled = 1`, las huellas correctas y una firma válida para `M`. |
+
 ## Configuración blockchain
 
 Se mantienen Hardhat 3, viem, hardhatMainnet, hardhatOp y sepolia, además de localhost y la conexión Amoy de Fase 2. Se comprueba chainId real, bytecode, artifactId y configuración del contrato. Las direcciones provienen de despliegues realmente ejecutados.

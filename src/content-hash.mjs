@@ -6,7 +6,11 @@ import { getPoseidon } from "./poseidon.mjs";
 // 31 bytes equivalen a 248 bits: cualquier bloque cabe en el campo sin reducción modular.
 export const BLOCK_SIZE = 31;
 
-/** Calcula la huella de fragmentos binarios ordenados, validando la longitud y usando un bloque de 31 bytes. */
+/**
+ * Calcula la huella de fragmentos binarios ordenados, validando la longitud y usando un bloque de 31 bytes.
+ * Entradas. Iterable de fragmentos Uint8Array y longitud total en bytes como BigInt o decimal.
+ * Salida. Promesa de la huella Poseidon como BigInt.
+ */
 export async function hashContentStream(chunks, fileLength) {
   const length = parseField(fileLength, "fileLength");
   const poseidon = await getPoseidon();
@@ -15,7 +19,11 @@ export async function hashContentStream(chunks, fileLength) {
   let seen = 0n;
   // El primer Poseidon incorpora la longitud original junto con el primer bloque.
   let state = length;
-  // Absorbe el bloque, incluido el relleno final con ceros, y limpia el búfer para el siguiente.
+  /**
+   * Absorbe un bloque en la huella acumulada y prepara el búfer para el siguiente.
+   * Entradas. Sin argumentos. Usa el bloque, el estado y el contador del cierre.
+   * Salida. Sin valor de retorno. Actualiza la huella acumulada y reinicia el búfer.
+   */
   const absorb = () => {
     state = poseidon.F.toObject(poseidon([state, bytesToBigIntBE(block)]));
     block.fill(0);
@@ -39,7 +47,11 @@ export async function hashContentStream(chunks, fileLength) {
   return state;
 }
 
-/** Calcula contentHash de un Uint8Array reutilizando el mismo algoritmo de procesamiento por bloques. */
+/**
+ * Calcula contentHash de un Uint8Array reutilizando el mismo algoritmo de procesamiento por bloques.
+ * Entradas. Bytes exactos del contenido como Uint8Array.
+ * Salida. Promesa de la huella Poseidon como BigInt.
+ */
 export async function hashContentBytes(bytes) {
   if (!(bytes instanceof Uint8Array)) throw new TypeError("Se requieren bytes Uint8Array");
   return hashContentStream([bytes], BigInt(bytes.byteLength));

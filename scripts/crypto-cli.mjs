@@ -25,7 +25,11 @@ const usages = {
   verify: "--file <archivo> --operation <operacion.json> --authorization <firma.json> --public-key <publica.json> [--witness <inputs.json>]",
 };
 
-/** Lee un archivo JSON en UTF-8 y evita incluir su contenido en los errores de sintaxis. */
+/**
+ * Lee un archivo JSON en UTF-8 y evita incluir su contenido en los errores de sintaxis.
+ * Entradas. Ruta del archivo JSON.
+ * Salida. Promesa del valor JSON analizado.
+ */
 async function readJson(path) {
   try {
     return JSON.parse(await readFile(path, "utf8"));
@@ -35,19 +39,31 @@ async function readJson(path) {
   }
 }
 
-/** Crea las carpetas necesarias y guarda la salida sin reemplazar un archivo existente. */
+/**
+ * Crea las carpetas necesarias y guarda la salida sin reemplazar un archivo existente.
+ * Entradas. Ruta de destino y texto de salida.
+ * Salida. Promesa sin valor. Escribe un archivo nuevo.
+ */
 async function writeOutput(path, text) {
   await mkdir(dirname(resolve(path)), { recursive: true });
   await writeFile(path, text + "\n", { flag: "wx" });
 }
 
-/** Exige una opción del comando y devuelve su valor, o indica cuál parámetro falta. */
+/**
+ * Exige una opción del comando y devuelve su valor, o indica cuál parámetro falta.
+ * Entradas. Opciones analizadas y nombre de la opción requerida.
+ * Salida. Texto de la opción suministrada.
+ */
 function required(values, name) {
   if (!values[name]) throw new TypeError(`Falta --${name}`);
   return values[name];
 }
 
-/** Ejecuta el comando solicitado: código 0 al completar, 1 ante errores y 2 si la autorización no verifica. */
+/**
+ * Despacha operaciones de huella, claves, autorización, firma o verificación.
+ * Entradas. Nombre del subcomando y arreglo de argumentos.
+ * Salida. Promesa sin valor. Emite el resultado del comando y establece el código de salida cuando corresponde.
+ */
 async function run(command, args) {
   try {
     if (command === "--help") {
@@ -57,7 +73,7 @@ async function run(command, args) {
     if (!Object.hasOwn(definitions, command)) {
       throw new TypeError("Falta un comando válido: hash, keygen, authorization, sign o verify");
     }
-    const options = Object.fromEntries(definitions[command].map(/* Declara cada opción admitida como una cadena de texto. */ (name) => [name, { type: "string" }]));
+    const options = Object.fromEntries(definitions[command].map(/* Declara cada opción admitida como una cadena de texto. Entradas. Nombre de una opción. Salida. Par con el nombre y su definición de tipo string. */ (name) => [name, { type: "string" }]));
     options.help = { type: "boolean" };
     const { values } = parseArgs({ args, options, strict: true });
     if (values.help) {

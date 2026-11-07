@@ -19,8 +19,23 @@ export interface ProofResult {
 export interface PublicReceipt { transactionHash: Hash; blockNumber: bigint; gasUsed: bigint; confirmationMs: number }
 export type Stage = "selected" | "hashing" | "hashed" | "permission" | "queued" | "authorizing" | "authorized" | "witness" | "proving" | "verifying" | "ready" | "wallet" | "submitted" | "confirmed";
 export interface WalletProvider {
+  /**
+   * Solicita una operación al proveedor de wallet.
+   * Entradas. Objeto con el nombre del método EIP-1193 y sus parámetros opcionales.
+   * Salida. Promesa del resultado del método. Se rechaza si falla la operación.
+   */
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
+  /**
+   * Suscribe un manejador a los cambios de la wallet si el proveedor ofrece eventos.
+   * Entradas. Nombre del evento y función que recibe sus datos.
+   * Salida. Sin valor de retorno. Registra el manejador.
+   */
   on?(event: string, listener: (...args: unknown[]) => void): void;
+  /**
+   * Retira una suscripción registrada en el proveedor de wallet.
+   * Entradas. Nombre del evento y el mismo manejador registrado.
+   * Salida. Sin valor de retorno. Desregistra el manejador.
+   */
   removeListener?(event: string, listener: (...args: unknown[]) => void): void;
 }
 declare global { interface Window { ethereum?: WalletProvider } }

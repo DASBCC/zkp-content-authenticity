@@ -1,0 +1,20 @@
+{
+  "format": "content-authenticity-deployment-v1",
+  "network": "localhost",
+  "chainId": "31337",
+  "verifierAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "registryAddress": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+  "owner": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "artifactId": "03a340c17e3511faaf475e1c81c68aae74a964899b28a209acb82fddd8b0bc50",
+  "ephemeral": true,
+  "createdAt": "2026-11-09T16:16:19.146Z",
+  "transactions": {
+    "verifier": "0xf310e8dd4f4af823df7c6c72042f19dc72bd6cd4208b75a80309e5f28ded38e3",
+    "registry": "0xe82b4a362ecba6a044c3ce445f1c059bc14946608bf7512df3514dfa61b51f3e",
+    "root": "0x53ae19c723f3f5b844b4719f42c2d79238150162ebbcf824fa3a30d9cc0c1c28"
+  },
+  "codeHashes": {
+    "verifier": "0x1305e6aa41e320d9e5e90fbe65c60918a7212efd2a01e1a481faa3f920f24e09",
+    "registry": "0xde97feb956a344d500fe4f4524421bb0661caea25b8c149ebaa5bd6d9fdc0769"
+  }
+}

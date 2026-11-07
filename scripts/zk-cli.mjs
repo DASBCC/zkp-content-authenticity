@@ -11,13 +11,21 @@ import { stringifyCrypto } from "../src/encoding.mjs";
 const OPTIONS = { artifacts: { type: "string" }, input: { type: "string" }, authorization: { type: "string" }, membership: { type: "string" }, out: { type: "string" }, force: { type: "boolean" }, resume: { type: "boolean" }, help: { type: "boolean" } };
 const COMMANDS = ["compile", "setup", "inputs", "witness", "prove", "verify", "export-verifier"];
 
-/** Exige una ruta de entrada antes de leer datos privados o pruebas serializadas. */
+/**
+ * Exige una ruta de entrada antes de leer datos privados o pruebas serializadas.
+ * Entradas. Opciones analizadas y nombre del argumento requerido.
+ * Salida. Valor de la opción requerida.
+ */
 function required(values, name) {
   if (!values[name]) throw new Error(`Falta --${name}`);
   return values[name];
 }
 
-/** Lee JSON sin incorporar su contenido a los errores de sintaxis. */
+/**
+ * Lee JSON sin incorporar su contenido a los errores de sintaxis.
+ * Entradas. Ruta a un archivo JSON de artefactos, entradas o prueba.
+ * Salida. Promesa del valor JSON analizado.
+ */
 async function readJson(filename) {
   try { return JSON.parse(await readFile(filename, "utf8")); }
   catch (error) {
@@ -26,7 +34,11 @@ async function readJson(filename) {
   }
 }
 
-/** Guarda una salida nueva sin sobrescribir resultados de ejecuciones anteriores. */
+/**
+ * Guarda una salida nueva sin sobrescribir resultados de ejecuciones anteriores.
+ * Entradas. Dato serializable y ruta de destino opcional.
+ * Salida. Promesa sin valor. Imprime el JSON o crea un archivo nuevo.
+ */
 async function output(value, filename) {
   const text = stringifyCrypto(value) + "\n";
   if (!filename) { process.stdout.write(text); return; }
@@ -34,7 +46,11 @@ async function output(value, filename) {
   await writeFile(filename, text, { flag: "wx", mode: 0o600 });
 }
 
-/** Interpreta el comando y conserva separados los resultados públicos y las entradas privadas. */
+/**
+ * Interpreta el comando y conserva separados los resultados públicos y las entradas privadas.
+ * Entradas. Sin argumentos. Lee el subcomando y sus opciones de process.argv.
+ * Salida. Promesa sin valor. Ejecuta el comando Groth16 y publica su resultado.
+ */
 async function run() {
   const command = process.argv[2];
   const { values } = parseArgs({ args: process.argv.slice(3), options: OPTIONS, strict: true });
@@ -46,7 +62,7 @@ async function run() {
   const options = { artifactsDir: values.artifacts };
   if (command === "compile") await output(await compileCircuit(options), values.out);
   else if (command === "setup") {
-    const manifest = await setupGroth16({ ...options, force: values.force, resume: values.resume, onProgress: /* Informa solamente del avance público de la preparación. */ (message) => console.error(message) });
+    const manifest = await setupGroth16({ ...options, force: values.force, resume: values.resume, onProgress: /* Informa del progreso de la preparación. Entradas. Mensaje público sobre el avance del setup. Salida. Sin valor de retorno. Escribe el mensaje en stderr. */ (message) => console.error(message) });
     await output({ artifactId: manifest.artifactId, setup: manifest.setup, metrics: manifest.metrics }, values.out);
   } else if (command === "inputs") {
     const filename = required(values, "out");

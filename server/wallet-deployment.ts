@@ -22,17 +22,29 @@ interface DeploymentPlan {
   sourceKeyFile: string; sourcesFile: string; verifierTransaction?: Hash; registryTransaction?: Hash;
 }
 
-/** Conserva los planes privados por red y evita usar claves EVM del servidor para los despliegues de la web. */
+/**
+ * Conserva los planes privados por red y evita usar claves EVM del servidor para los despliegues de la web.
+ * Entradas. Conexión a la red y configuración operativa del servicio.
+ * Salida. Controlador para preparar planes, validar avances, adoptar despliegues y autorizar transacciones.
+ */
 export function walletDeployments(connection: BlockchainConnection, runtime: WebRuntime) {
   const directory = path.resolve(runtime.runtimeFile ? path.dirname(runtime.runtimeFile) : path.join(process.env.WEB_DATA_DIRECTORY || ".local-web", connection.networkName), "deployment-plans");
 
-  /** Exige un identificador aleatorio canónico antes de resolver su archivo privado. */
+  /**
+   * Exige un identificador aleatorio canónico antes de resolver su archivo privado.
+   * Entradas. Identificador del plan de despliegue.
+   * Salida. Ruta al JSON privado del plan.
+   */
   function filename(id: string) {
     if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) throw new ServiceError("BAD_REQUEST", "El plan de despliegue no es válido.");
     return path.join(directory, id + ".json");
   }
 
-  /** Recupera un plan privado y comprueba la capacidad de acceso entregada al navegador. */
+  /**
+   * Recupera un plan privado y comprueba la capacidad de acceso entregada al navegador.
+   * Entradas. Identificador del plan y token de capacidad.
+   * Salida. Promesa del plan privado vigente para la cadena y los artefactos actuales.
+   */
   async function load(id: string, token: string) {
     let plan: DeploymentPlan;
     try { plan = JSON.parse(await readFile(filename(id), "utf8")); }
@@ -43,7 +55,11 @@ export function walletDeployments(connection: BlockchainConnection, runtime: Web
     return plan;
   }
 
-  /** Prepara una fuente de desarrollo explícita y devuelve solo ABI, bytecode y parámetros públicos. */
+  /**
+   * Prepara una fuente de desarrollo y los datos necesarios para desplegar con la wallet.
+   * Entradas. Dirección de la cuenta que firmará el despliegue.
+   * Salida. Promesa del plan con identificador, token, red, raíz, ABI y bytecode.
+   */
   async function prepare(address: Address) {
     const manifest = await ensureZkArtifacts();
     const id = randomUUID();
@@ -65,7 +81,11 @@ export function walletDeployments(connection: BlockchainConnection, runtime: Web
       verifier: { abi: verifier.abi, bytecode: verifier.bytecode }, registry: { abi: registry.abi, bytecode: registry.bytecode } };
   }
 
-  /** Verifica creador, recibo y datos exactos de creación antes de aceptar una dirección de contrato. */
+  /**
+   * Verifica creador, recibo y datos exactos de creación antes de aceptar una dirección de contrato.
+   * Entradas. Hash de la transacción, dirección del creador y datos de creación esperados.
+   * Salida. Promesa de la dirección confirmada del contrato.
+   */
   async function creation(hash: Hash, owner: Address, expectedInput: Hex) {
     if (typeof hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new ServiceError("BAD_REQUEST", "La referencia de transacción no es válida.");
     const client = await connection.viem.getPublicClient();
@@ -74,7 +94,11 @@ export function walletDeployments(connection: BlockchainConnection, runtime: Web
     return receipt.contractAddress;
   }
 
-  /** Comprueba y conserva avances confirmados para poder continuar después de rechazar una transacción. */
+  /**
+   * Comprueba y conserva avances confirmados para poder continuar después de rechazar una transacción.
+   * Entradas. Identificador y token del plan, etapa y hash de la transacción.
+   * Salida. Promesa de un objeto con saved en true tras persistir el avance.
+   */
   async function progress(id: string, token: string, kind: string, hash: Hash) {
     const plan = await load(id, token);
     const verifierArtifact = await artifacts.readArtifact("Groth16Verifier");
@@ -89,7 +113,11 @@ export function walletDeployments(connection: BlockchainConnection, runtime: Web
     return { saved: true };
   }
 
-  /** Adopta el despliegue únicamente tras comprobar ambos contratos, propietario, dominio y raíz publicada. */
+  /**
+   * Adopta el despliegue únicamente tras comprobar ambos contratos, propietario, dominio y raíz publicada.
+   * Entradas. Cuenta autorizada y plan con hashes de despliegue y publicación de raíz.
+   * Salida. Promesa de un objeto con ready en true y los metadatos públicos del despliegue adoptado.
+   */
   async function commit(address: Address, input: { planId: string; planToken: string; verifierTransaction: Hash; registryTransaction: Hash; rootTransaction: Hash }) {
     const plan = await load(input.planId, input.planToken);
     if (plan.owner.toLowerCase() !== address.toLowerCase()) throw new ServiceError("ADMIN_ONLY", "El plan pertenece a otra cuenta.", 403);
@@ -120,7 +148,11 @@ export function walletDeployments(connection: BlockchainConnection, runtime: Web
     return { ready: true, ...record };
   }
 
-  /** Restringe la wallet de laboratorio a creaciones exactas y raíces de planes autorizados para esa cuenta. */
+  /**
+   * Restringe la wallet de laboratorio a creaciones exactas y raíces de planes autorizados para esa cuenta.
+   * Entradas. Cuenta, destino opcional y calldata de la transacción propuesta.
+   * Salida. Promesa de true si la operación coincide con un plan de la cuenta, o false si no coincide.
+   */
   async function allowsTransaction(address: Address, to: Address | undefined, data: Hex) {
     let files;
     try { files = await readdir(directory); } catch { return false; }

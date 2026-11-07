@@ -1,7 +1,11 @@
 /** Calcula la huella en un trabajador del navegador sin subir, recodificar ni acumular el archivo completo. */
 import { hashContentStream } from "../../src/content-hash.mjs";
 
-/** Entrega bloques de 64 KiB y publica los bytes que el algoritmo ya terminó de procesar. */
+/**
+ * Entrega bloques de 64 KiB y publica los bytes que el algoritmo ya terminó de procesar.
+ * Entradas. Archivo local que se procesa por fragmentos.
+ * Salida. Iterador asíncrono de Uint8Array. También publica el avance de lectura.
+ */
 async function* chunks(file: File) {
   for (let offset = 0; offset < file.size; offset += 64 * 1024) {
     const bytes = new Uint8Array(await file.slice(offset, offset + 64 * 1024).arrayBuffer());
@@ -10,7 +14,11 @@ async function* chunks(file: File) {
   }
 }
 
-/** Atiende un archivo por trabajador y devuelve solamente su huella decimal o un error controlado. */
+/**
+ * Atiende un archivo por trabajador y devuelve solamente su huella decimal o un error controlado.
+ * Entradas. Mensaje del navegador con el File seleccionado.
+ * Salida. Promesa sin valor. Publica la huella decimal o un mensaje de error.
+ */
 self.onmessage = async (event: MessageEvent<{ file: File }>) => {
   try {
     const file = event.data.file;

@@ -19,21 +19,33 @@ import { temporaryDirectory, vector } from "./fixtures.mjs";
 // Clave pública del vector de ensayo de la Fase 1; no contiene un secreto de operación.
 const firstSource = { sourceId: 1n, publicKey: vector.publicKey };
 
-/** Ejecuta el administrador de fuentes en otro proceso y devuelve su salida sin alterar el entorno. */
+/**
+ * Ejecuta el administrador de fuentes en otro proceso y devuelve su salida sin alterar el entorno.
+ * Entradas. Subcomando del CLI de fuentes y argumentos opcionales.
+ * Salida. Resultado de spawnSync con código, stdout y stderr.
+ */
 function runSourcesCommand(action, args = []) {
   return spawnSync(process.execPath, [resolve("scripts/sources-cli.mjs"), ...(action ? [action] : []), ...args], {
     encoding: "utf8", timeout: 60000,
   });
 }
 
-/** Exige éxito del proceso y devuelve su resultado JSON para las comprobaciones del caso. */
+/**
+ * Exige éxito del proceso y devuelve su resultado JSON para las comprobaciones del caso.
+ * Entradas. Subcomando del CLI de fuentes y argumentos opcionales.
+ * Salida. JSON analizado de stdout. Falla si el proceso terminó con error.
+ */
 function successfulSourcesCommand(action, args = []) {
   const result = runSourcesCommand(action, args);
   assert.equal(result.status, 0, result.stderr || String(result.error));
   return JSON.parse(result.stdout);
 }
 
-/** Comprueba la relación de hoja y que tanto el identificador como la clave quedan comprometidos. */
+/**
+ * Comprueba la relación de hoja y que tanto el identificador como la clave quedan comprometidos.
+ * Entradas. Sin argumentos. Usa la primera fuente y una clave alternativa.
+ * Salida. Promesa sin valor. Comprueba qué campos determinan la hoja.
+ */
 test("la hoja Merkle vincula sourceId y ambas coordenadas de la clave", async () => {
   const expected = await poseidonHash([1n, BigInt(vector.publicKey[0]), BigInt(vector.publicKey[1])]);
   assert.equal(await createSourceLeaf(firstSource), expected);
@@ -42,7 +54,11 @@ test("la hoja Merkle vincula sourceId y ambas coordenadas de la clave", async ()
   assert.notEqual(await createSourceLeaf({ sourceId: 1n, publicKey: otherKey }), expected);
 });
 
-/** Reconstruye por separado la raíz vacía y comprueba que ninguna posición represente una fuente autorizada. */
+/**
+ * Reconstruye por separado la raíz vacía y comprueba que ninguna posición represente una fuente autorizada.
+ * Entradas. Sin argumentos. Usa un conjunto de fuentes vacío.
+ * Salida. Promesa sin valor. Contrasta la raíz con ocho niveles de Poseidon.
+ */
 test("el árbol vacío utiliza hojas cero y ocho niveles Poseidon", async () => {
   const tree = await buildAuthorizedSourcesTree([]);
   let expected = EMPTY_SOURCE_LEAF;
@@ -56,7 +72,11 @@ test("el árbol vacío utiliza hojas cero y ocho niveles Poseidon", async () => 
   await assert.rejects(getSourceProof(tree, 1n), /no está autorizada/);
 });
 
-/** Construye el mismo conjunto en órdenes distintos y exige una raíz idéntica sin alterar los datos recibidos. */
+/**
+ * Construye el mismo conjunto en órdenes distintos y exige una raíz idéntica sin alterar los datos recibidos.
+ * Entradas. Sin argumentos. Usa conjuntos equivalentes en órdenes distintos.
+ * Salida. Promesa sin valor. Comprueba el orden de fuentes y la igualdad de raíz.
+ */
 test("la raíz es determinista y ordena numéricamente las fuentes", async () => {
   const sources = [{ ...firstSource, sourceId: "10" }, { ...firstSource, sourceId: "2" }, firstSource];
   const original = stringifyCrypto(sources);
@@ -71,7 +91,11 @@ test("la raíz es determinista y ordena numéricamente las fuentes", async () =>
   assert.equal(Object.isFrozen(tree.sources[0].publicKey), true);
 });
 
-/** Verifica rutas de posiciones pares e impares y su intercambio mediante cadenas decimales JSON. */
+/**
+ * Verifica rutas de posiciones pares e impares y su intercambio mediante cadenas decimales JSON.
+ * Entradas. Sin argumentos. Usa un árbol de ensayo y una fuente incluida.
+ * Salida. Promesa sin valor. Comprueba la ruta y su validez tras serializarla.
+ */
 test("las rutas se exportan de abajo hacia arriba y sobreviven a JSON", async () => {
   const tree = await buildAuthorizedSourcesTree([firstSource, { ...firstSource, sourceId: 2n }, { ...firstSource, sourceId: 3n }]);
   for (const sourceId of [1n, 2n, 3n]) {
@@ -86,7 +110,11 @@ test("las rutas se exportan de abajo hacia arriba y sobreviven a JSON", async ()
   assert.equal(await verifySourceProof(await getSourceProof(restoredTree, "2")), true);
 });
 
-/** Modifica cada componente de una prueba manteniendo su representación válida y exige el rechazo criptográfico. */
+/**
+ * Modifica cada componente de una prueba manteniendo su representación válida y exige el rechazo criptográfico.
+ * Entradas. Sin argumentos. Usa una prueba Merkle y variaciones de sus datos.
+ * Salida. Promesa sin valor. Comprueba que se rechaza cada alteración.
+ */
 test("rechaza hojas, raíces, claves, identificadores y rutas alterados", async () => {
   const tree = await buildAuthorizedSourcesTree([firstSource, { ...firstSource, sourceId: 2n }]);
   const proof = await getSourceProof(tree, 1n);
@@ -103,7 +131,11 @@ test("rechaza hojas, raíces, claves, identificadores y rutas alterados", async 
   assert.equal(await verifySourceProof({ ...proof, merklePathIndices: indices }), false);
 });
 
-/** Rechaza niveles incompletos, direcciones no booleanas y representaciones que pierden la forma canónica. */
+/**
+ * Rechaza niveles incompletos, direcciones no booleanas y representaciones que pierden la forma canónica.
+ * Entradas. Sin argumentos. Usa rutas de estructura, longitud o índice inválidos.
+ * Salida. Promesa sin valor. Comprueba el rechazo antes de la verificación.
+ */
 test("valida la estructura y los valores de las rutas antes de usarlas", async () => {
   const proof = await getSourceProof(await buildAuthorizedSourcesTree([firstSource]), 1n);
   await assert.rejects(verifySourceProof({ ...proof, merklePathElements: proof.merklePathElements.slice(1) }), /niveles/);
@@ -118,7 +150,11 @@ test("valida la estructura y los valores de las rutas antes de usarlas", async (
   await assert.rejects(verifySourceProof({ ...proof, publicKey: [0n, 1n] }));
 });
 
-/** Comprueba las reglas del conjunto autorizado antes de construir sus niveles criptográficos. */
+/**
+ * Comprueba las reglas del conjunto autorizado antes de construir sus niveles criptográficos.
+ * Entradas. Sin argumentos. Usa identificadores y puntos inválidos, y fuentes duplicadas.
+ * Salida. Promesa sin valor. Comprueba el rechazo de las fuentes inválidas.
+ */
 test("rechaza fuentes duplicadas, identificadores inválidos y claves ajenas al subgrupo", async () => {
   await assert.rejects(buildAuthorizedSourcesTree([firstSource, { ...firstSource, sourceId: "1" }]), /repetido/);
   for (const sourceId of [0n, -1n, FIELD_MODULUS, 1, "01"]) {
@@ -129,7 +165,11 @@ test("rechaza fuentes duplicadas, identificadores inválidos y claves ajenas al 
   await assert.rejects(buildAuthorizedSourcesTree(null), /arreglo/);
 });
 
-/** Ocupa todas las hojas y comprueba que el árbol y las altas rechacen fuentes adicionales. */
+/**
+ * Ocupa todas las hojas y comprueba que el árbol y las altas rechacen fuentes adicionales.
+ * Entradas. Sin argumentos. Usa conjuntos en el límite y por encima de 256 fuentes.
+ * Salida. Promesa sin valor. Comprueba el límite de capacidad.
+ */
 test("la capacidad fija es 256 fuentes y no se amplía silenciosamente", async () => {
   const sources = [];
   for (let index = 0; index < MERKLE_CAPACITY; index++) {
@@ -143,7 +183,11 @@ test("la capacidad fija es 256 fuentes y no se amplía silenciosamente", async (
   await assert.rejects(addAuthorizedSource(sources, extra), /hasta 256/);
 });
 
-/** Aplica altas y rotaciones de clave sobre nuevos arreglos y comprueba que cambie la raíz autorizada. */
+/**
+ * Aplica altas y rotaciones de clave sobre nuevos arreglos y comprueba que cambie la raíz autorizada.
+ * Entradas. Sin argumentos. Usa un conjunto y fuentes para alta y actualización.
+ * Salida. Promesa sin valor. Comprueba orden, cambios y conservación del conjunto anterior.
+ */
 test("las altas y actualizaciones mantienen conjuntos nuevos y ordenados", async () => {
   const sources = [firstSource];
   const added = await addAuthorizedSource(sources, { ...firstSource, sourceId: 2n });
@@ -162,7 +206,11 @@ test("las altas y actualizaciones mantienen conjuntos nuevos y ordenados", async
   await assert.rejects(updateAuthorizedSource(added, { ...firstSource, sourceId: 9n }), /no está autorizada/);
 });
 
-/** Revoca una fuente y exige reconstruir las rutas sin volver a admitirla mediante la raíz nueva. */
+/**
+ * Revoca una fuente y exige reconstruir las rutas sin volver a admitirla mediante la raíz nueva.
+ * Entradas. Sin argumentos. Usa un árbol inicial y el identificador revocado.
+ * Salida. Promesa sin valor. Comprueba la exclusión de la fuente y la conservación del original.
+ */
 test("la revocación elimina la pertenencia y conserva el conjunto anterior", async () => {
   const sources = [firstSource, { ...firstSource, sourceId: 2n }];
   const previous = await buildAuthorizedSourcesTree(sources);
@@ -181,7 +229,11 @@ test("la revocación elimina la pertenencia y conserva el conjunto anterior", as
   assert.equal(empty.sources.length, 0);
 });
 
-/** Comprueba el manejo real de archivos de fuentes y rutas sin publicar identidades en la consola. */
+/**
+ * Comprueba el manejo real de archivos de fuentes y rutas sin publicar identidades en la consola.
+ * Entradas. Sin argumentos. Usa archivos temporales del CLI de fuentes.
+ * Salida. Promesa sin valor. Comprueba las operaciones y el código de una prueba alterada.
+ */
 test("el CLI administra fuentes, genera rutas y distingue una prueba alterada", { timeout: 120000 }, async () => {
   const directory = await temporaryDirectory("sources-cli-");
   try {
@@ -235,7 +287,11 @@ test("el CLI administra fuentes, genera rutas y distingue una prueba alterada", 
   }
 });
 
-/** Rechaza comandos incompletos y JSON mal formado sin mostrar su contenido en los errores. */
+/**
+ * Rechaza comandos incompletos y JSON mal formado sin mostrar su contenido en los errores.
+ * Entradas. Sin argumentos. Usa comandos inválidos y opciones de ayuda.
+ * Salida. Promesa sin valor. Comprueba salidas y códigos del CLI.
+ */
 test("el CLI de fuentes valida argumentos y ofrece ayuda en español", async () => {
   const directory = await temporaryDirectory("sources-help-");
   try {

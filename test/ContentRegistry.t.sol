@@ -18,12 +18,14 @@ contract ContentRegistryTest is Test {
     ContentRegistry private registry;
 
     /// @notice Despliega el verificador generado y un registro nuevo para cada prueba.
+    /// @dev Entradas. Sin parámetros. Salida. Despliega y guarda las dos instancias de prueba.
     function setUp() public {
         verifier = new Groth16Verifier();
         registry = new ContentRegistry(address(verifier));
     }
 
     /// @notice Comprueba el administrador, el verificador y el estado inicial sin raíz habilitada.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_ConstructorInicializaElRegistro() public view {
         assertEq(registry.owner(), address(this));
         assertEq(registry.pendingOwner(), address(0));
@@ -34,6 +36,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Impide desplegar el registro con una dirección sin código ejecutable.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_ConstructorRechazaVerificadorSinContrato() public {
         vm.expectRevert(ContentRegistry.InvalidVerifier.selector);
         new ContentRegistry(address(0));
@@ -42,6 +45,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Comprueba que sustituir una raíz rechaza la anterior para nuevos registros.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_ActualizarRaizInvalidaLaAnterior() public {
         registry.setAuthorizedSourcesRoot(ROOT);
         assertTrue(registry.rootEnabled());
@@ -52,6 +56,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Comprueba la desactivación y la reactivación explícita de una raíz existente.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_DesactivarRaizBloqueaNuevosRegistros() public {
         registry.setAuthorizedSourcesRoot(ROOT);
         registry.disableAuthorizedSourcesRoot();
@@ -63,6 +68,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Impide que una cuenta ajena cambie o desactive la autorización de fuentes.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_SoloAdministradorGestionaRaices() public {
         vm.expectRevert(ContentRegistry.Unauthorized.selector);
         vm.prank(OTHER);
@@ -76,6 +82,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Rechaza la raíz vacía reservada y los valores que no pertenecen al campo.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_RechazaRaicesMalCodificadas() public {
         uint256 modulus = registry.FIELD_MODULUS();
         vm.expectRevert(ContentRegistry.InvalidRoot.selector);
@@ -86,6 +93,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Exige aceptación desde la cuenta propuesta antes de transferir el control.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_TransferenciaAdministrativaEnDosPasos() public {
         registry.transferOwnership(NEXT_OWNER);
         assertEq(registry.owner(), address(this));
@@ -110,6 +118,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Rechaza propuestas inválidas y transferencias iniciadas por cuentas ajenas.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_RechazaTransferenciasNoAutorizadas() public {
         vm.expectRevert(ContentRegistry.InvalidAddress.selector);
         registry.transferOwnership(address(0));
@@ -125,11 +134,13 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Exige configurar una raíz antes de aceptar cualquier solicitud.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_RechazaRegistrosSinRaizActiva() public {
         _expectRejection(_signals(), ContentRegistry.AuthorizationRootDisabled.selector);
     }
 
     /// @notice Comprueba la versión, la raíz, la identidad y los tres componentes del dominio.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_RechazaContextosYVersionesIncorrectos() public {
         registry.setAuthorizedSourcesRoot(ROOT);
         uint256[8] memory inputs = _signals();
@@ -158,6 +169,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Rechaza la copia de una autorización presentada desde otra cuenta.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_RechazaRegistranteDistintoDelRemitente() public {
         registry.setAuthorizedSourcesRoot(ROOT);
         uint256[8] memory inputs = _signals();
@@ -168,6 +180,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Impide que truncar una dirección de más de 160 bits cambie el contexto probado.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_RechazaDireccionesConBitsSuperiores() public {
         registry.setAuthorizedSourcesRoot(ROOT);
         uint256[8] memory inputs = _signals();
@@ -179,6 +192,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Comprueba el límite del campo para cada una de las ocho señales públicas.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_RechazaTodasLasSenalesFueraDelCampo() public {
         registry.setAuthorizedSourcesRoot(ROOT);
         uint256 modulus = registry.FIELD_MODULUS();
@@ -192,6 +206,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Rechaza una prueba nula mediante el verificador real sin consumir datos de registro.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_PruebaInvalidaNoModificaElEstado() public {
         registry.setAuthorizedSourcesRoot(ROOT);
         _expectRejection(_signals(), ContentRegistry.InvalidProof.selector);
@@ -200,6 +215,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Convierte en rechazo una prueba que contiene una coordenada de punto inválida.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_RechazaPuntosDePruebaInvalidos() public {
         registry.setAuthorizedSourcesRoot(ROOT);
         uint256[2] memory pA;
@@ -213,6 +229,7 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Devuelve un registro inexistente sin publicar datos de fuentes autorizadas.
+    /// @dev Entradas. Sin parámetros. Usa el fixture de la prueba. Salida. Completa las aserciones o revierte si alguna falla.
     function test_ConsultaNegativaDevuelveValoresVacios() public view {
         ContentRegistry.ContentRecord memory record = registry.getRecord(CONTENT);
         assertFalse(record.exists);
@@ -223,6 +240,8 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Construye señales de contexto coherentes para aislar la condición que prueba cada caso.
+    /// @dev Entradas. Sin parámetros. Usa el registro, la cadena y las constantes del ensayo.
+    /// @return Las ocho señales públicas en orden de protocolo.
     function _signals() private view returns (uint256[8] memory) {
         return [
             CONTENT,
@@ -237,6 +256,8 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Presenta una prueba nula al verificador real, manteniendo el contexto indicado.
+    /// @dev Salida. Intenta ejecutar el registro con puntos de prueba a cero. Propaga el resultado de la llamada como éxito o reversión.
+    /// @param inputs Señales públicas del caso de prueba.
     function _registerEmptyProof(uint256[8] memory inputs) private {
         uint256[2] memory pA;
         uint256[2][2] memory pB;
@@ -245,6 +266,9 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Comprueba el motivo del rechazo y que no aparezcan registros o autorizaciones consumidas.
+    /// @dev Salida. Completa la comprobación o falla si el rechazo o el estado posterior difieren.
+    /// @param inputs Señales públicas del intento de registro.
+    /// @param errorSelector Selector del error esperado.
     function _expectRejection(uint256[8] memory inputs, bytes4 errorSelector) private {
         vm.expectRevert(errorSelector);
         _registerEmptyProof(inputs);
@@ -252,6 +276,9 @@ contract ContentRegistryTest is Test {
     }
 
     /// @notice Confirma que una operación fallida no cree el contenido ni consuma el identificador público.
+    /// @dev Salida. Falla si existe el registro o si se consumió el nullifier.
+    /// @param contentHash Huella consultada en el registro.
+    /// @param nullifier Identificador público consultado en el mapa de autorizaciones consumidas.
     function _assertUnchanged(uint256 contentHash, uint256 nullifier) private view {
         assertFalse(registry.getRecord(contentHash).exists);
         assertFalse(registry.usedNullifiers(nullifier));

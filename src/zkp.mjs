@@ -23,7 +23,11 @@ const SUPPORTED_VERSIONS = { circom2: "0.2.23", circomlib: "2.0.5", circomlibjs:
 const PRIVATE_INPUT_NAMES = ["sourceId", "nonce", "publicKeyX", "publicKeyY", "R8x", "R8y", "S", "merklePathElements", "merklePathIndices"];
 const require = createRequire(import.meta.url);
 
-/** Determina las rutas de los artefactos sin depender de una red blockchain concreta. */
+/**
+ * Determina las rutas de los artefactos sin depender de una red blockchain concreta.
+ * Entradas. Opciones con directorio de artefactos y ruta del verificador, ambas opcionales.
+ * Salida. Objeto con rutas absolutas del circuito, claves, verificador y manifiesto.
+ */
 export function artifactPaths(options = {}) {
   const root = path.resolve(options.artifactsDir ?? ".zk-artifacts/v1");
   return {
@@ -37,7 +41,11 @@ export function artifactPaths(options = {}) {
   };
 }
 
-/** Encuentra la raíz de un paquete instalado, incluso si su entrada está dentro de build/. */
+/**
+ * Encuentra la raíz de un paquete instalado, incluso si su entrada está dentro de build/.
+ * Entradas. Nombre de un paquete resoluble desde el proyecto.
+ * Salida. Ruta absoluta del directorio que contiene su package.json.
+ */
 function packageRoot(name) {
   let directory = path.dirname(require.resolve(name));
   while (true) {
@@ -49,7 +57,11 @@ function packageRoot(name) {
   }
 }
 
-/** Registra las versiones instaladas y rechaza herramientas con APIs no comprobadas. */
+/**
+ * Registra las versiones instaladas y rechaza herramientas con APIs no comprobadas.
+ * Entradas. Sin argumentos. Consulta los paquetes fijados por SUPPORTED_VERSIONS.
+ * Salida. Promesa de un objeto con las versiones comprobadas de las herramientas.
+ */
 async function installedVersions() {
   const result = {};
   for (const [name, expected] of Object.entries(SUPPORTED_VERSIONS)) {
@@ -61,18 +73,30 @@ async function installedVersions() {
   return result;
 }
 
-/** Calcula SHA-256 para identificar artefactos; la huella multimedia del protocolo sigue siendo Poseidon. */
+/**
+ * Calcula SHA-256 para identificar artefactos Groth16.
+ * Entradas. Ruta del artefacto que se quiere identificar.
+ * Salida. Promesa del digest SHA-256 como cadena hexadecimal.
+ */
 async function fileHash(filename) {
   const hash = createHash("sha256");
   for await (const chunk of fs.createReadStream(filename)) hash.update(chunk);
   return hash.digest("hex");
 }
 
-/** Identifica también los circuitos de circomlib que intervienen en la compilación. */
+/**
+ * Identifica también los circuitos de circomlib que intervienen en la compilación.
+ * Entradas. Sin argumentos. Lee los archivos .circom de la instalación de circomlib.
+ * Salida. Promesa de un digest SHA-256 hexadecimal del conjunto de circuitos.
+ */
 async function circuitLibraryHash() {
   const root = path.join(packageRoot("circomlib"), "circuits");
   const files = [];
-  /** Recorre los archivos de circuitos sin incluir paquetes ni directorios ajenos. */
+  /**
+   * Recorre los archivos de circuitos sin incluir paquetes ni directorios ajenos.
+   * Entradas. Directorio desde el que se inicia el recorrido recursivo.
+   * Salida. Promesa sin valor. Agrega rutas .circom al arreglo del cierre.
+   */
   async function visit(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const filename = path.join(directory, entry.name);
@@ -87,7 +111,11 @@ async function circuitLibraryHash() {
   return hash.digest("hex");
 }
 
-/** Describe los parámetros públicos que deben coincidir entre JavaScript, Circom y Solidity. */
+/**
+ * Describe los parámetros públicos que deben coincidir entre JavaScript, Circom y Solidity.
+ * Entradas. Sin argumentos. Usa las constantes del protocolo.
+ * Salida. Objeto con versión, dominio, profundidad Merkle, bits de nonce y orden público.
+ */
 function protocolParameters() {
   return {
     protocolVersion: PROTOCOL_VERSION.toString(), protocolDomain: PROTOCOL_DOMAIN.toString(),
@@ -95,7 +123,11 @@ function protocolParameters() {
   };
 }
 
-/** Escribe JSON de forma atómica para no dejar un manifiesto parcialmente actualizado. */
+/**
+ * Escribe JSON de forma atómica para no dejar un manifiesto parcialmente actualizado.
+ * Entradas. Ruta de destino y valor serializable.
+ * Salida. Promesa sin valor. Publica el JSON mediante un cambio de nombre.
+ */
 async function writeJson(filename, value) {
   await mkdir(path.dirname(filename), { recursive: true });
   const temporary = filename + "." + randomUUID() + ".tmp";
@@ -103,27 +135,43 @@ async function writeJson(filename, value) {
   await rename(temporary, filename);
 }
 
-/** Ejecuta una operación criptográfica y cierra los trabajadores de BN128 al terminar. */
+/**
+ * Ejecuta una operación criptográfica y cierra los trabajadores de BN128 al terminar.
+ * Entradas. Función que recibe la curva BN128 y ejecuta una operación.
+ * Salida. Promesa del resultado de la operación en la cola de la curva.
+ */
 function withCurve(operation) {
-  /** Reserva la curva compartida solamente durante esta tarea de la cola. */
+  /**
+   * Reserva la curva compartida solamente durante esta tarea de la cola.
+   * Entradas. Sin argumentos. Usa la operación encolada del cierre.
+   * Salida. Promesa del resultado después de liberar los trabajadores de la curva.
+   */
   async function execute() {
     const curve = await curves.getCurveFromName("bn128");
     try { return await operation(curve); }
     finally { await curve.terminate(); }
   }
   const pending = curveQueue.then(execute, execute);
-  curveQueue = pending.catch(/* Mantiene utilizable la cola después de un error. */ () => undefined);
+  curveQueue = pending.catch(/* Mantiene utilizable la cola después de un error. Entradas. Ningún argumento utilizado. Salida. undefined para que la cola continúe después de un rechazo. */ () => undefined);
   return pending;
 }
 
-/** Genera la instancia principal con el orden público y los parámetros centralizados del protocolo. */
+/**
+ * Genera la instancia principal con el orden público y los parámetros centralizados del protocolo.
+ * Entradas. Sin argumentos. Usa los parámetros y señales del protocolo.
+ * Salida. Texto Circom de la instancia principal.
+ */
 function circuitEntry() {
   return "pragma circom 2.2.0;\ninclude \"circuits/content-authenticity.circom\";\n" +
     "component main {public [" + PUBLIC_SIGNAL_NAMES.join(", ") + "]} = ContentAuthenticity(" +
     MERKLE_DEPTH + ", " + PROTOCOL_VERSION + ", " + PROTOCOL_DOMAIN + ");\n";
 }
 
-/** Compila Circom a R1CS/WASM y comprueba que no se hayan publicado señales privadas por accidente. */
+/**
+ * Compila Circom a R1CS/WASM y comprueba que no se hayan publicado señales privadas por accidente.
+ * Entradas. Opciones de rutas de artefactos, con directorio dentro del proyecto.
+ * Salida. Promesa de un informe con métricas, cantidades de señales y hashes de fuente y R1CS.
+ */
 export async function compileCircuit(options = {}) {
   const paths = artifactPaths(options);
   const relative = path.relative(process.cwd(), paths.root);
@@ -134,7 +182,11 @@ export async function compileCircuit(options = {}) {
   const output = [];
   const nativeFs = {
     ...fs,
-    /** Captura la salida del compilador sin mezclarla con los resultados JSON de los comandos. */
+    /**
+     * Captura la salida del compilador sin mezclarla con los resultados JSON de los comandos.
+     * Entradas. Descriptor, búfer, desplazamiento, longitud y posición de escritura.
+     * Salida. Número de bytes capturados o escritos por el sistema.
+     */
     writeSync(fd, buffer, offset, length, position) {
       if (fd === 1 || fd === 2) {
         const start = offset ?? 0;
@@ -153,7 +205,7 @@ export async function compileCircuit(options = {}) {
   try { await runner.execute(await readFile(require.resolve("circom2/circom.wasm"))); }
   catch (error) { throw new Error("Falló la compilación Circom: " + output.join(""), { cause: error }); }
   const compilationMs = performance.now() - start;
-  const info = await withCurve(/* Lee las estadísticas del circuito realmente compilado. */ async () => r1cs.info(paths.r1cs));
+  const info = await withCurve(/* Lee las estadísticas del circuito realmente compilado. Entradas. Sin argumentos. Usa la ruta del R1CS compilado. Salida. Promesa del informe R1CS de snarkjs. */ async () => r1cs.info(paths.r1cs));
   if (info.nPubInputs !== PUBLIC_SIGNAL_NAMES.length || info.nOutputs !== 0) throw new Error("El circuito expone un número inesperado de señales públicas u outputs");
   const report = {
     compilationMs, constraints: info.nConstraints, wires: info.nVars,
@@ -164,7 +216,11 @@ export async function compileCircuit(options = {}) {
   return report;
 }
 
-/** Comprueba que el manifiesto y cada archivo corresponden a la misma versión del circuito. */
+/**
+ * Comprueba que el manifiesto y cada archivo corresponden a la misma versión del circuito.
+ * Entradas. Opciones de rutas para localizar los artefactos Groth16.
+ * Salida. Promesa del manifiesto validado contra parámetros, versiones y hashes.
+ */
 export async function ensureZkArtifacts(options = {}) {
   const paths = artifactPaths(options);
   let manifest;
@@ -184,7 +240,11 @@ export async function ensureZkArtifacts(options = {}) {
   return manifest;
 }
 
-/** Ejecuta una ceremonia local de desarrollo y genera las claves y el verificador de ese circuito. */
+/**
+ * Ejecuta una ceremonia local de desarrollo y genera las claves y el verificador de ese circuito.
+ * Entradas. Opciones de rutas, force o resume y callback de progreso opcional.
+ * Salida. Promesa del manifiesto con los artefactos, claves y métricas del setup.
+ */
 export async function setupGroth16(options = {}) {
   const paths = artifactPaths(options);
   if (options.force && options.resume) throw new Error("Utiliza --force para regenerar o --resume para recuperar, no ambos");
@@ -194,9 +254,13 @@ export async function setupGroth16(options = {}) {
   const power = Math.max(14, Math.ceil(Math.log2(compilation.constraints + compilation.publicInputs + 1)));
   if (power > 20) throw new Error("El circuito excede el tamaño previsto para el ensayo local");
   const setupStart = performance.now();
-  /** Comunica el avance sin publicar entropía, semillas ni datos del testigo. */
+  /**
+   * Comunica el avance sin publicar entropía, semillas ni datos del testigo.
+   * Entradas. Mensaje público de avance.
+   * Salida. Sin valor de retorno. Invoca onProgress si está configurado.
+   */
   function progress(message) { options.onProgress?.(message); }
-  const manifest = await withCurve(/* Prepara y comprueba las contribuciones reales de desarrollo. */ async (curve) => {
+  const manifest = await withCurve(/* Prepara y comprueba las contribuciones reales de desarrollo. Entradas. Curva BN128 de la cola. Salida. Promesa del manifiesto generado con la clave y los artefactos comprobados. */ async (curve) => {
     const initialTau = path.join(paths.root, "powersOfTau_initial.ptau");
     const contributedTau = path.join(paths.root, "powersOfTau_contributed.ptau");
     const initialKey = path.join(paths.root, "circuit_initial.zkey");
@@ -260,7 +324,11 @@ export async function setupGroth16(options = {}) {
   return manifest;
 }
 
-/** Normaliza las ocho señales públicas sin convertir enteros criptográficos a Number. */
+/**
+ * Normaliza las ocho señales públicas sin convertir enteros criptográficos a Number.
+ * Entradas. Arreglo con las ocho señales públicas en orden de protocolo.
+ * Salida. Arreglo equivalente de cadenas decimales canónicas.
+ */
 function normalizePublicSignals(values) {
   if (!Array.isArray(values) || values.length !== PUBLIC_SIGNAL_NAMES.length) throw new TypeError("Se requieren exactamente ocho señales públicas");
   const result = [];
@@ -268,7 +336,11 @@ function normalizePublicSignals(values) {
   return result;
 }
 
-/** Valida los límites de cada entrada y prepara solamente los nombres aceptados por el circuito. */
+/**
+ * Valida los límites de cada entrada y prepara solamente los nombres aceptados por el circuito.
+ * Entradas. Objeto con todos los campos públicos y privados exigidos por el circuito.
+ * Salida. Objeto validado con valores y rutas Merkle en decimal.
+ */
 function normalizeCircuitInputs(input) {
   exactKeys(input, [...PUBLIC_SIGNAL_NAMES, ...PRIVATE_INPUT_NAMES], "entradas del circuito");
   const result = {};
@@ -293,7 +365,11 @@ function normalizeCircuitInputs(input) {
   return result;
 }
 
-/** Une una autorización firmada con su pertenencia al conjunto de fuentes reconocidas. */
+/**
+ * Une una autorización firmada con su pertenencia al conjunto de fuentes reconocidas.
+ * Entradas. Paquete de autorización firmado y prueba Merkle de la misma fuente.
+ * Salida. Promesa de las entradas normalizadas del circuito, incluido el nullifier.
+ */
 export async function createProofInputs(authorizationPackage, membership) {
   const record = await normalizeAuthorizationPackage(authorizationPackage);
   const authorization = record.authorization;
@@ -313,7 +389,11 @@ export async function createProofInputs(authorizationPackage, membership) {
   });
 }
 
-/** Construye el testigo en memoria para evitar archivos privados parciales cuando una restricción falla. */
+/**
+ * Construye el testigo en memoria para evitar archivos privados parciales cuando una restricción falla.
+ * Entradas. Entradas del circuito y rutas de artefactos con el WASM.
+ * Salida. Promesa del testigo en memoria, las señales públicas y el tiempo de cálculo.
+ */
 async function buildWitness(input, paths) {
   const normalized = normalizeCircuitInputs(input);
   const memory = { type: "mem" };
@@ -324,7 +404,11 @@ async function buildWitness(input, paths) {
   return { memory, publicSignals, witnessMs: performance.now() - start };
 }
 
-/** Genera un testigo privado y lo guarda solamente cuando se solicita esta operación explícita. */
+/**
+ * Genera un testigo privado y lo guarda solamente cuando se solicita esta operación explícita.
+ * Entradas. Entradas del circuito y opciones de artefactos y destino del testigo.
+ * Salida. Promesa de la ruta del testigo privado, identificador de artefactos y tiempo de cálculo.
+ */
 export async function calculateWitness(inputs, options = {}) {
   const manifest = await ensureZkArtifacts(options);
   const paths = artifactPaths(options);
@@ -337,12 +421,20 @@ export async function calculateWitness(inputs, options = {}) {
   return { witnessPath, artifactId: manifest.artifactId, metrics: { witnessMs: built.witnessMs } };
 }
 
-/** Convierte la prueba al orden de coordenadas esperado por el verificador Solidity y por viem. */
+/**
+ * Convierte la prueba al orden de coordenadas esperado por el verificador Solidity y por viem.
+ * Entradas. Prueba Groth16 y sus ocho señales públicas.
+ * Salida. Promesa de un objeto con pA, pB, pC y publicSignals como tuplas de BigInt.
+ */
 export async function formatSolidityProof(proof, publicSignals) {
   const signals = normalizePublicSignals(publicSignals);
   const text = await groth16.exportSolidityCallData(proof, signals);
   const values = JSON.parse("[" + text + "]");
-  /** Convierte las coordenadas hexadecimales del exportador a BigInt sin perder precisión. */
+  /**
+   * Convierte las coordenadas hexadecimales del exportador a BigInt sin perder precisión.
+   * Entradas. Coordenada hexadecimal o arreglo anidado de coordenadas.
+   * Salida. BigInt o arreglo equivalente de BigInt.
+   */
   function integers(value) {
     if (!Array.isArray(value)) return BigInt(value);
     const result = [];
@@ -352,14 +444,18 @@ export async function formatSolidityProof(proof, publicSignals) {
   return { pA: integers(values[0]), pB: integers(values[1]), pC: integers(values[2]), publicSignals: integers(values[3]) };
 }
 
-/** Genera y verifica una prueba Groth16; el testigo permanece en memoria y nunca se incluye en la salida. */
+/**
+ * Genera y verifica una prueba Groth16 a partir de un testigo en memoria.
+ * Entradas. Entradas normalizadas y opciones de rutas y progreso.
+ * Salida. Promesa de la prueba Groth16 verificada con señales, datos para Solidity, métricas e identificador.
+ */
 export async function generateProof(inputs, options = {}) {
   const manifest = await ensureZkArtifacts(options);
   const paths = artifactPaths(options);
   options.onProgress?.("witness");
   const built = await buildWitness(inputs, paths);
   try {
-    return await withCurve(/* Produce la prueba real y mide la verificación fuera de cadena. */ async () => {
+    return await withCurve(/* Produce la prueba real y mide la verificación fuera de cadena. Entradas. Sin argumentos. Usa el testigo en memoria y las rutas de artefactos. Salida. Promesa de la prueba verificada, con señales, métricas y datos para Solidity. */ async () => {
       options.onProgress?.("proving");
       const proveStart = performance.now();
       const { proof, publicSignals } = await groth16.prove(paths.zkey, built.memory);
@@ -380,13 +476,17 @@ export async function generateProof(inputs, options = {}) {
   } finally { built.memory.data.fill(0); }
 }
 
-/** Verifica una prueba contra la clave y las señales públicas del manifiesto vigente. */
+/**
+ * Verifica una prueba contra la clave y las señales públicas del manifiesto vigente.
+ * Entradas. Prueba Groth16, señales públicas y opciones de rutas de artefactos.
+ * Salida. Promesa de true si la clave valida la prueba con esas señales, o false si la rechaza.
+ */
 export async function verifyProof(proof, publicSignals, options = {}) {
   await ensureZkArtifacts(options);
   const paths = artifactPaths(options);
   const signals = normalizePublicSignals(publicSignals);
   const key = JSON.parse(await readFile(paths.verificationKey, "utf8"));
-  return withCurve(/* Rechaza pruebas mal construidas sin convertirlas en resultados de éxito. */ async () => {
+  return withCurve(/* Rechaza pruebas mal construidas sin convertirlas en resultados de éxito. Entradas. Sin argumentos. Usa la clave, las señales y la prueba del cierre. Salida. Promesa de true si se verifica la prueba, o false ante rechazo o error de snarkjs. */ async () => {
     try { return await groth16.verify(key, signals, proof); }
     catch { return false; }
   });

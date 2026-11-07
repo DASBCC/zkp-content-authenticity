@@ -11,14 +11,18 @@ await mkdir(data, { recursive: true });
 const node = spawn(process.execPath, ["node_modules/hardhat/dist/src/cli.js", "node", "--network", "hardhatMainnet", "--port", String(nodePort), "--hostname", "127.0.0.1"], { windowsHide: true, stdio: "ignore" });
 let app;
 
-/** Detiene solo los procesos hijos creados para esta prueba. */
+/**
+ * Detiene solo los procesos hijos creados para esta prueba.
+ * Entradas. Sin argumentos. Usa los procesos hijos iniciados por el script.
+ * Salida. Sin valor de retorno. Solicita la terminación del nodo y de la aplicación si existe.
+ */
 function close() { app?.kill(); node.kill(); }
 process.once("SIGINT", close); process.once("SIGTERM", close); process.once("exit", close);
 
 for (let count = 0; count < 100; count++) {
   try { const result = await fetch("http://127.0.0.1:" + nodePort, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }) }); if ((await result.json()).result === "0x7a69") break; } catch { /* El nodo todavía no terminó de iniciar. */ }
   if (count === 99) throw new Error("El nodo E2E no inició");
-  await new Promise(/* Espera disponibilidad del nodo sin bloquear la preparación de otras tareas. */ (resolve) => setTimeout(resolve, 100));
+  await new Promise(/* Espera disponibilidad del nodo sin bloquear la preparación de otras tareas. Entradas. Función resolve de la promesa. Salida. Sin valor útil. Programa resolve después de 100 ms. */ (resolve) => setTimeout(resolve, 100));
 }
 app = spawn(process.execPath, ["--import", "tsx", "scripts/web-cli.ts", "start"], { windowsHide: true, stdio: "inherit", env: { ...process.env, BLOCKCHAIN_NETWORK: "localhost", RPC_URL: "http://127.0.0.1:" + nodePort, CHAIN_ID: "31337", WEB_PORT: String(webPort), WEB_ORIGIN: "http://127.0.0.1:" + webPort, WEB_DATA_DIRECTORY: data, WEB_DEPLOYMENT_FILE: "", WEB_SIGNING_ENABLED: "false", REGISTRY_ADDRESS: "", VERIFIER_ADDRESS: "" } });
-app.once("exit", /* Cierra el nodo aislado cuando termina el servicio del ensayo. */ (code) => { close(); process.exitCode = code ?? 0; });
+app.once("exit", /* Cierra el nodo aislado cuando termina el servicio del ensayo. Entradas. Código de salida del servicio o null. Salida. Sin valor de retorno. Detiene la infraestructura y propaga el código. */ (code) => { close(); process.exitCode = code ?? 0; });

@@ -22,17 +22,29 @@ const { viem, networkHelpers } = connection;
 const publicClient = await viem.getPublicClient();
 const [owner, other] = await viem.getWalletClients();
 
-/** Cierra únicamente la conexión creada para este archivo de pruebas. */
+/**
+ * Cierra únicamente la conexión creada para este archivo de pruebas.
+ * Entradas. Sin argumentos. Usa la conexión aislada de la suite.
+ * Salida. Promesa sin valor. Cierra la conexión.
+ */
 after(async () => { await connection.close(); });
 
-/** Sustituye una señal pública conservando las coordenadas originales para probar su vinculación criptográfica. */
+/**
+ * Sustituye una señal pública conservando las coordenadas originales para probar su vinculación criptográfica.
+ * Entradas. Tuplas de una prueba, índice de señal y valor BigInt de reemplazo.
+ * Salida. Nuevos argumentos Solidity con una señal cambiada.
+ */
 function changeSignal(args: ProofArguments, index: number, value: bigint): ProofArguments {
   const signals = [...args[3]];
   signals[index] = value;
   return [args[0], args[1], args[2], signals as unknown as PublicSignals];
 }
 
-/** Despliega ambos contratos reales y prepara pruebas válidas de distintos contextos sobre una instantánea reutilizable. */
+/**
+ * Despliega ambos contratos reales y prepara pruebas válidas de distintos contextos sobre una instantánea reutilizable.
+ * Entradas. Ningún argumento.
+ * Salida. Promesa del entorno de prueba con contratos, wallets, pruebas y operaciones reutilizables.
+ */
 async function deployFixture() {
   const seed = testSeed();
   const secondSeed = privateKeyFromHex("42".repeat(32));
@@ -51,7 +63,11 @@ async function deployFixture() {
   const hashingMs = performance.now() - hashStart;
   const operation = await createRegistrationOperation(connection, registry.address, 1n);
 
-  /** Firma una autorización de ensayo y genera su prueba real contra la raíz y el contexto recibidos. */
+  /**
+   * Firma una autorización de ensayo y genera su prueba real contra la raíz y el contexto recibidos.
+   * Entradas. Huella y opciones de contexto, nonce, fuente, semilla y árbol de prueba.
+   * Salida. Promesa de la prueba Groth16 con señales públicas, métricas y datos para Solidity.
+   */
   async function prove(hash: bigint, context = operation.context, nonce = generateNonce(), sourceId = 1n, sourceSeed = seed, sourceTree = tree) {
     const authorization = await signContentAuthorization({ contentHash: hash, protocolVersion: 1n, sourceId, nonce, context }, sourceSeed);
     const membership = await getSourceProof(sourceTree, sourceId);
@@ -68,13 +84,21 @@ async function deployFixture() {
   return { deployment, registry, verifier, contentHash, hashingMs, tree, sources, prove, proof, reused, wrongChain, wrongRegistry, unauthorized, args, secondSeed };
 }
 
-/** Verifica que un intento rechazado no consuma la autorización ni cree un registro. */
+/**
+ * Verifica que un intento rechazado no consuma la autorización ni cree un registro.
+ * Entradas. Instancia del registro y argumentos Solidity de la prueba rechazada.
+ * Salida. Promesa sin valor. Falla si se guardó el contenido o se consumió el nullifier.
+ */
 async function assertUnchanged(registry: Awaited<ReturnType<typeof deployFixture>>["registry"], args: ProofArguments) {
   assert.equal((await registry.read.getRecord([args[3][0]])).exists, false);
   assert.equal(await registry.read.usedNullifiers([args[3][3]]), false);
 }
 
-/** Ejecuta desde el archivo hasta una transacción confirmada y guarda métricas públicas de esta ejecución local. */
+/**
+ * Ejecuta desde el archivo hasta una transacción confirmada y guarda métricas públicas de esta ejecución local.
+ * Entradas. Sin argumentos. Usa el archivo de ejemplo y el fixture desplegado.
+ * Salida. Promesa sin valor. Comprueba el registro y escribe las métricas públicas de la ejecución.
+ */
 test("E2E: archivo, firma, Merkle, Groth16, verificador real, registro y consulta", async () => {
   const fixture = await networkHelpers.loadFixture(deployFixture);
   const { deployment, registry, verifier, proof, args, contentHash } = fixture;
@@ -105,7 +129,11 @@ test("E2E: archivo, firma, Merkle, Groth16, verificador real, registro y consult
   await writeFile("metrics/runs/e2e-local-" + Date.now() + ".json", stringifyCrypto(report) + "\n", { flag: "wx" });
 });
 
-/** Comprueba que el contenido registrado no se duplica y que la autorización no puede usarse con otra huella. */
+/**
+ * Comprueba que el contenido registrado no se duplica y que la autorización no puede usarse con otra huella.
+ * Entradas. Sin argumentos. Usa las pruebas del fixture con contenido o nullifier repetidos.
+ * Salida. Promesa sin valor. Falla si se admite alguno de los duplicados.
+ */
 test("rechaza contenido duplicado y un nullifier ya consumido para otro contenido", async () => {
   const { registry, proof, reused, args, deployment } = await networkHelpers.loadFixture(deployFixture);
   await registerProof(connection, deployment, proof);
@@ -116,7 +144,11 @@ test("rechaza contenido duplicado y un nullifier ya consumido para otro contenid
   assert.equal((await registry.read.getRecord([reusedArgs[3][0]])).exists, false);
 });
 
-/** Comprueba que copiar una prueba o sustituir su registrante no permite atribuirla a otra billetera. */
+/**
+ * Comprueba que copiar una prueba o sustituir su registrante no permite atribuirla a otra billetera.
+ * Entradas. Sin argumentos. Usa una prueba válida y otra wallet del nodo.
+ * Salida. Promesa sin valor. Falla si otra cuenta puede registrar la prueba.
+ */
 test("rechaza copia y front-running de una prueba por otro registrante", async () => {
   const { registry, args } = await networkHelpers.loadFixture(deployFixture);
   await viem.assertions.revertWithCustomError(registry.write.register(args, { account: other.account }), registry, "WrongRegistrant");
@@ -125,7 +157,11 @@ test("rechaza copia y front-running de una prueba por otro registrante", async (
   await assertUnchanged(registry, args);
 });
 
-/** Comprueba que una prueba matemáticamente válida para otra cadena o contrato no sirve en este registro. */
+/**
+ * Comprueba que una prueba matemáticamente válida para otra cadena o contrato no sirve en este registro.
+ * Entradas. Sin argumentos. Usa pruebas de otro contrato o cadena del fixture.
+ * Salida. Promesa sin valor. Falla si la prueba se acepta al cambiar su contexto.
+ */
 test("rechaza pruebas reales de otra cadena o contrato, incluso si alteran sus señales públicas", async () => {
   const { registry, wrongChain, wrongRegistry } = await networkHelpers.loadFixture(deployFixture);
   const chainArgs = await proofArguments(wrongChain.proof, wrongChain.publicSignals);
@@ -138,7 +174,11 @@ test("rechaza pruebas reales de otra cadena o contrato, incluso si alteran sus s
   await assertUnchanged(registry, contractArgs);
 });
 
-/** Comprueba que una fuente que conoce su propia clave y raíz no obtiene autorización del administrador. */
+/**
+ * Comprueba que una fuente que conoce su propia clave y raíz no obtiene autorización del administrador.
+ * Entradas. Sin argumentos. Usa una prueba de una fuente externa y una raíz deshabilitada.
+ * Salida. Promesa sin valor. Falla si se acepta alguno de los registros.
+ */
 test("rechaza una prueba válida de una fuente no autorizada y una raíz deshabilitada", async () => {
   const { registry, unauthorized, args } = await networkHelpers.loadFixture(deployFixture);
   const attackerArgs = await proofArguments(unauthorized.proof, unauthorized.publicSignals);
@@ -150,7 +190,11 @@ test("rechaza una prueba válida de una fuente no autorizada y una raíz deshabi
   await assertUnchanged(registry, args);
 });
 
-/** Comprueba la versión, el dominio y la vinculación de huella y nullifier sin modificar el estado al fallar. */
+/**
+ * Comprueba la versión, el dominio y la vinculación de huella y nullifier sin modificar el estado al fallar.
+ * Entradas. Sin argumentos. Usa el fixture y variantes alteradas de una prueba.
+ * Salida. Promesa sin valor. Falla si el registro cambia o si se acepta la prueba alterada.
+ */
 test("rechaza señales públicas y coordenadas alteradas sin consumir estado", async () => {
   const { registry, args } = await networkHelpers.loadFixture(deployFixture);
   await viem.assertions.revertWithCustomError(registry.write.register(changeSignal(args, 1, 2n)), registry, "UnsupportedProtocolVersion");
@@ -162,7 +206,11 @@ test("rechaza señales públicas y coordenadas alteradas sin consumir estado", a
   await assertUnchanged(registry, args);
 });
 
-/** Revoca una fuente, conserva el registro histórico y acepta una fuente restante mediante la nueva raíz. */
+/**
+ * Revoca una fuente, conserva el registro histórico y acepta una fuente restante mediante la nueva raíz.
+ * Entradas. Sin argumentos. Usa el fixture y reconstruye el árbol tras revocar una fuente.
+ * Salida. Promesa sin valor. Comprueba el rechazo de la raíz anterior, el historial y un nuevo registro.
+ */
 test("la revocación bloquea la raíz anterior, conserva el historial y permite nuevas pruebas autorizadas", async () => {
   const { registry, deployment, proof, reused, contentHash, sources, prove, secondSeed } = await networkHelpers.loadFixture(deployFixture);
   await registerProof(connection, deployment, proof);

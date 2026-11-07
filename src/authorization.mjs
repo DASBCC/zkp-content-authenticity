@@ -11,13 +11,21 @@ const BASE_KEYS = ["contentHash", "protocolVersion", "sourceId", "nonce"];
 // Propiedades que debe suministrar el llamador para vincular la firma con una operación concreta.
 const CONTEXT_KEYS = ["registrant", "chainId", "registryAddress", "protocolDomain"];
 
-/** Valida los cuatro datos base y los convierte a BigInt en el orden del protocolo. */
+/**
+ * Valida los cuatro datos base y los convierte a BigInt en el orden del protocolo.
+ * Entradas. Objeto base con contentHash, protocolVersion, sourceId y nonce.
+ * Salida. Objeto con los cuatro campos como BigInt.
+ */
 export function normalizeAuthorizationBase(base) {
   exactKeys(base, BASE_KEYS, "authorization");
-  return Object.fromEntries(BASE_KEYS.map(/* Asocia cada campo base con su BigInt validado. */ (key) => [key, parseField(base[key], key)]));
+  return Object.fromEntries(BASE_KEYS.map(/* Asocia cada campo base con su BigInt validado. Entradas. Nombre de un campo de la autorización base. Salida. Par con el nombre y su valor BigInt validado. */ (key) => [key, parseField(base[key], key)]));
 }
 
-/** Valida las direcciones y los valores de campo del contexto recibido para la operación. */
+/**
+ * Valida las direcciones y los valores de campo del contexto recibido para la operación.
+ * Entradas. Contexto con registrant, chainId, registryAddress y protocolDomain.
+ * Salida. Contexto con direcciones en minúsculas y cadena y dominio como BigInt.
+ */
 export function normalizeOperationContext(context) {
   exactKeys(context, CONTEXT_KEYS, "context");
   const chainId = parseField(context.chainId, "chainId");
@@ -30,24 +38,40 @@ export function normalizeOperationContext(context) {
   };
 }
 
-/** Calcula Poseidon(contentHash, protocolVersion, sourceId, nonce) y devuelve un BigInt. */
+/**
+ * Calcula Poseidon(contentHash, protocolVersion, sourceId, nonce) y devuelve un BigInt.
+ * Entradas. Autorización base con huella, versión, fuente y nonce.
+ * Salida. Promesa del hash base como BigInt.
+ */
 export async function calculateAuthorizationHash(base) {
   const value = normalizeAuthorizationBase(base);
-  return poseidonHash(BASE_KEYS.map(/* Extrae los valores en el orden requerido por Poseidon. */ (key) => value[key]));
+  return poseidonHash(BASE_KEYS.map(/* Extrae los valores en el orden requerido por Poseidon. Entradas. Nombre de un campo base. Salida. Valor BigInt asociado a ese nombre. */ (key) => value[key]));
 }
 
-/** Calcula el compromiso Poseidon del registrante, la red, el registro y el dominio. */
+/**
+ * Calcula el compromiso Poseidon del registrante, la red, el registro y el dominio.
+ * Entradas. Contexto con las dos direcciones EVM, la cadena y el dominio.
+ * Salida. Promesa del hash del contexto como BigInt.
+ */
 export async function calculateOperationContext(context) {
   const value = normalizeOperationContext(context);
   return poseidonHash([BigInt(value.registrant), value.chainId, BigInt(value.registryAddress), value.protocolDomain]);
 }
 
-/** Combina la autorización base y su contexto para obtener el elemento de campo que se firma. */
+/**
+ * Combina la autorización base y su contexto para obtener el elemento de campo que se firma.
+ * Entradas. Hash base y contexto de la operación.
+ * Salida. Promesa del hash firmado como BigInt.
+ */
 export async function calculateSignedAuthorizationHash(authorizationHash, context) {
   return poseidonHash([parseField(authorizationHash, "authorizationHash"), await calculateOperationContext(context)]);
 }
 
-/** Construye las tres huellas de autorización usando el contexto explícito de la operación. */
+/**
+ * Construye las tres huellas de autorización usando el contexto explícito de la operación.
+ * Entradas. Campos base y contexto de una operación de registro.
+ * Salida. Promesa de la autorización normalizada con sus tres hashes.
+ */
 export async function createAuthorization(input) {
   exactKeys(input, [...BASE_KEYS, "context"], "authorization input");
   const { context: rawContext, ...rawBase } = input;
@@ -64,7 +88,11 @@ export const AUTHORIZATION_FORMAT = "eddsa-babyjubjub-poseidon-authorization-v1"
 // Propiedades completas que se esperan dentro de la autorización serializada.
 const AUTH_KEYS = ["contentHash", "protocolVersion", "sourceId", "nonce", "context", "authorizationHash", "operationContext", "signedAuthorizationHash"];
 
-/** Construye la autorización, deriva la clave pública y firma la huella vinculada al contexto. */
+/**
+ * Construye la autorización, deriva la clave pública y firma la huella vinculada al contexto.
+ * Entradas. Datos base, contexto y semilla EdDSA privada de 32 bytes.
+ * Salida. Promesa del paquete con formato, autorización, clave pública y firma.
+ */
 export async function signContentAuthorization(input, privateKey) {
   const authorization = await createAuthorization(input);
   const publicKey = await derivePublicKey(privateKey);
@@ -72,7 +100,11 @@ export async function signContentAuthorization(input, privateKey) {
   return { format: AUTHORIZATION_FORMAT, authorization, publicKey, signature };
 }
 
-/** Valida el paquete y la coherencia de sus huellas; la firma se comprueba al verificarlo. */
+/**
+ * Comprueba el formato y la coherencia interna del paquete de autorización.
+ * Entradas. Paquete de autorización con firma, clave y hashes declarados.
+ * Salida. Promesa del paquete normalizado con los hashes recalculados.
+ */
 export async function normalizeAuthorizationPackage(value) {
   exactKeys(value, ["format", "authorization", "publicKey", "signature"], "authorization package");
   if (value.format !== AUTHORIZATION_FORMAT) throw new TypeError("Formato de autorización incompatible");
@@ -88,15 +120,27 @@ export async function normalizeAuthorizationPackage(value) {
   };
 }
 
-/** Valida el paquete y lo convierte a JSON con enteros representados como cadenas decimales. */
+/**
+ * Valida el paquete y lo convierte a JSON con enteros representados como cadenas decimales.
+ * Entradas. Paquete de autorización que se quiere almacenar o transferir.
+ * Salida. Promesa de una cadena JSON con los enteros en decimal.
+ */
 export async function serializeAuthorizationPackage(value) {
   return stringifyCrypto(await normalizeAuthorizationPackage(value));
 }
 
-/** Lee un paquete JSON, rechaza números que puedan perder precisión y normaliza sus datos. */
+/**
+ * Lee un paquete JSON, rechaza números que puedan perder precisión y normaliza sus datos.
+ * Entradas. Cadena JSON con los enteros criptográficos como texto decimal.
+ * Salida. Promesa del paquete de autorización normalizado.
+ */
 export async function deserializeAuthorizationPackage(json) {
   const value = JSON.parse(json);
-  // Recorre el JSON y rechaza Number antes de convertir las cadenas decimales a BigInt.
+  /**
+   * Recorre el JSON para comprobar la representación de los enteros.
+   * Entradas. Valor del JSON analizado, incluidos objetos y arreglos anidados.
+   * Salida. Sin valor de retorno. Lanza TypeError si encuentra un Number.
+   */
   const inspect = (item) => {
     if (typeof item === "number") throw new TypeError("El JSON criptográfico debe usar cadenas decimales");
     if (item && typeof item === "object") Object.values(item).forEach(inspect);
@@ -105,18 +149,26 @@ export async function deserializeAuthorizationPackage(json) {
   return normalizeAuthorizationPackage(value);
 }
 
-/** Verifica el contenido y la operación esperados usando una clave pública de confianza independiente. */
+/**
+ * Verifica el contenido y la operación esperados usando una clave pública de confianza independiente.
+ * Entradas. Paquete firmado, huella esperada, operación esperada y clave pública de confianza.
+ * Salida. Promesa de true si coinciden los datos esperados y la firma es válida, o false si difieren.
+ */
 export async function verifyContentAuthorization(value, { contentHash, operation, publicKey }) {
   exactKeys(operation, ["protocolVersion", "sourceId", "nonce", "context"], "operation");
   const record = await normalizeAuthorizationPackage(value);
   const trustedKey = await validatePublicKey(publicKey);
   const expected = await createAuthorization({ contentHash, ...operation });
-  if (record.publicKey.some(/* Detecta una coordenada que difiere de la clave de confianza. */ (coordinate, index) => coordinate !== trustedKey[index])) return false;
+  if (record.publicKey.some(/* Detecta una coordenada que difiere de la clave de confianza. Entradas. Coordenada de la clave del paquete e índice. Salida. true si difiere de la coordenada de confianza. */ (coordinate, index) => coordinate !== trustedKey[index])) return false;
   if (record.authorization.signedAuthorizationHash !== expected.signedAuthorizationHash) return false;
   return verifyAuthorizationSignature(expected.signedAuthorizationHash, record.signature, trustedKey);
 }
 
-/** Exporta la firma, la clave pública y los datos auxiliares como entradas del circuito, sin la semilla privada. */
+/**
+ * Exporta la firma, la clave pública y los datos auxiliares como entradas del circuito, sin la semilla privada.
+ * Entradas. Paquete de autorización firmado.
+ * Salida. Promesa de las entradas de Circom como cadenas decimales.
+ */
 export async function exportProverInputs(value) {
   const record = await normalizeAuthorizationPackage(value);
   const { authorization: auth, signature, publicKey } = record;

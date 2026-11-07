@@ -10,7 +10,11 @@ if (existsSync(".env")) loadEnvFile(".env");
 // Orden de las claves privadas EVM sobre secp256k1; no es el campo BabyJubJub del protocolo.
 const EVM_PRIVATE_KEY_ORDER = BigInt("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
 
-/** Valida una URL HTTP sin mostrar posibles credenciales del proveedor en los mensajes de error. */
+/**
+ * Valida una URL HTTP sin mostrar posibles credenciales del proveedor en los mensajes de error.
+ * Entradas. URL candidata, URL de respaldo y nombre de la variable para el diagnóstico.
+ * Salida. URL HTTP o HTTPS elegida como texto.
+ */
 function resolveRpc(value: string | undefined, fallback: string, name: string): string {
   const resolved = value?.trim() || fallback;
   try {
@@ -22,7 +26,11 @@ function resolveRpc(value: string | undefined, fallback: string, name: string): 
   }
 }
 
-/** Convierte el identificador local al número entero seguro que exige la configuración de Hardhat. */
+/**
+ * Convierte el identificador local al número entero seguro que exige la configuración de Hardhat.
+ * Entradas. Sin argumentos. Lee CHAIN_ID del entorno y usa 31337 por defecto.
+ * Salida. Identificador positivo como entero seguro de JavaScript.
+ */
 function resolveLocalChainId(): number {
   const value = process.env.CHAIN_ID?.trim() || "31337";
   if (!/^[1-9][0-9]*$/.test(value)) throw new Error("CHAIN_ID debe ser un entero decimal positivo");
@@ -31,7 +39,11 @@ function resolveLocalChainId(): number {
   return chainId;
 }
 
-/** Normaliza exclusivamente la clave de la billetera de despliegue y rechaza formatos o escalares inválidos. */
+/**
+ * Normaliza exclusivamente la clave de la billetera de despliegue y rechaza formatos o escalares inválidos.
+ * Entradas. Sin argumentos. Lee DEPLOYER_PRIVATE_KEY del entorno.
+ * Salida. Arreglo vacío si la variable está ausente o arreglo con la clave EVM normalizada.
+ */
 function resolveDeploymentAccounts(): string[] {
   const value = process.env.DEPLOYER_PRIVATE_KEY?.trim();
   if (!value) return [];

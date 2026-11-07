@@ -17,7 +17,11 @@ import { temporaryDirectory, testSeed, vector } from "./fixtures.mjs";
 
 let fixture;
 
-/** Prepara una autorización de ensayo y su pertenencia a una raíz conocida, sin regenerar la ceremonia. */
+/**
+ * Prepara una autorización de ensayo y su pertenencia a una raíz conocida, sin regenerar la ceremonia.
+ * Entradas. Sin argumentos. Usa la semilla de ensayo y los artefactos locales.
+ * Salida. Promesa sin valor. Prepara el fixture con autorización, raíz y entradas.
+ */
 before(async () => {
   const manifest = await ensureZkArtifacts();
   const publicKey = await derivePublicKey(testSeed());
@@ -30,7 +34,11 @@ before(async () => {
   fixture = { manifest, publicKey, otherKey, tree, authorization, membership, inputs };
 });
 
-/** Comprueba la fórmula y los rangos del identificador consumible sin convertir datos de campo a Number. */
+/**
+ * Comprueba la fórmula y los rangos del identificador consumible sin convertir datos de campo a Number.
+ * Entradas. Sin argumentos. Usa nonces generados y un contexto de prueba.
+ * Salida. Promesa sin valor. Comprueba rango y fórmula del nullifier.
+ */
 test("el nullifier reproduce la fórmula Poseidon y el nonce tiene 248 bits aleatorios", async () => {
   const first = generateNonce();
   const second = generateNonce();
@@ -46,7 +54,11 @@ test("el nullifier reproduce la fórmula Poseidon y el nonce tiene 248 bits alea
   await assert.rejects(calculateNullifier({ ...value, nonce: NONCE_LIMIT }));
 });
 
-/** Comprueba que sólo se publiquen los ocho campos previstos y que el circuito no tenga salidas adicionales. */
+/**
+ * Comprueba que sólo se publiquen los ocho campos previstos y que el circuito no tenga salidas adicionales.
+ * Entradas. Sin argumentos. Usa el manifiesto, la clave y las entradas del fixture.
+ * Salida. Promesa sin valor. Comprueba las señales públicas y los datos privados.
+ */
 test("el circuito expone ocho señales públicas y ninguna identidad privada ni salida", async () => {
   const key = JSON.parse(await readFile(artifactPaths().verificationKey, "utf8"));
   assert.equal(key.nPublic, 8);
@@ -60,7 +72,11 @@ test("el circuito expone ocho señales públicas y ninguna identidad privada ni 
   assert.equal(fixture.inputs.protocolDomain, PROTOCOL_DOMAIN.toString());
 });
 
-/** Genera un testigo válido con el adaptador y elimina el archivo privado al terminar la comprobación. */
+/**
+ * Genera un testigo válido con el adaptador y elimina el archivo privado al terminar la comprobación.
+ * Entradas. Sin argumentos. Usa las entradas válidas del fixture.
+ * Salida. Promesa sin valor. Comprueba el testigo generado y elimina el archivo temporal.
+ */
 test("la firma autorizada y la ruta válida producen un testigo real", async () => {
   const result = await calculateWitness(fixture.inputs);
   try { assert.ok((await readFile(result.witnessPath)).byteLength > 0); }
@@ -78,17 +94,25 @@ const mutations = [
 ];
 
 for (const [label, name, amount] of mutations) {
-  /** Modifica un dato del testigo sin cambiar la firma y exige que una restricción del circuito lo rechace. */
+  /**
+   * Modifica un dato del testigo sin cambiar la firma y exige que una restricción del circuito lo rechace.
+   * Entradas. Contexto de prueba de Node y variante alterada de la iteración.
+   * Salida. Promesa sin valor. Comprueba el rechazo de la variante.
+   */
   test("el circuito rechaza " + label, async (t) => {
-    t.mock.method(console, "error", /* Oculta únicamente los mensajes de los rechazos esperados. */ () => {});
+    t.mock.method(console, "error", /* Oculta únicamente los mensajes de los rechazos esperados. Entradas. Ningún argumento utilizado. Salida. Sin valor de retorno. Omite diagnósticos de la variante inválida. */ () => {});
     const inputs = { ...fixture.inputs, [name]: ((BigInt(fixture.inputs[name]) + amount) % FIELD_MODULUS).toString() };
     await assert.rejects(wtns.calculate(inputs, artifactPaths().wasm, { type: "mem" }, { sanityCheck: true }));
   });
 }
 
-/** Prueba directamente los rangos y las direcciones de la ruta, incluidos valores que JavaScript ya rechaza. */
+/**
+ * Prueba directamente los rangos y las direcciones de la ruta, incluidos valores que JavaScript ya rechaza.
+ * Entradas. Contexto de prueba de Node para el doble de consola.
+ * Salida. Promesa sin valor. Comprueba el rechazo de nonce, fuente e índices inválidos.
+ */
 test("el circuito rechaza nonce nulo o grande, fuente cero e índices Merkle no booleanos", async (t) => {
-  t.mock.method(console, "error", /* Mantiene limpia la salida de los casos deliberadamente inválidos. */ () => {});
+  t.mock.method(console, "error", /* Mantiene limpia la salida de los casos deliberadamente inválidos. Entradas. Ningún argumento utilizado. Salida. Sin valor de retorno. Omite diagnósticos de entradas inválidas. */ () => {});
   const cases = [
     { ...fixture.inputs, nonce: "0" }, { ...fixture.inputs, nonce: NONCE_LIMIT.toString() },
     { ...fixture.inputs, sourceId: "0" }, { ...fixture.inputs, chainId: "0" },
@@ -102,9 +126,13 @@ test("el circuito rechaza nonce nulo o grande, fuente cero e índices Merkle no 
   for (const input of cases) await assert.rejects(wtns.calculate(input, artifactPaths().wasm, { type: "mem" }, { sanityCheck: true }));
 });
 
-/** Una clave diferente y una fuente no incluida en la raíz no pueden satisfacer la firma y la pertenencia. */
+/**
+ * Una clave diferente y una fuente no incluida en la raíz no pueden satisfacer la firma y la pertenencia.
+ * Entradas. Contexto de prueba de Node para el doble de consola.
+ * Salida. Promesa sin valor. Comprueba el rechazo de la clave y fuente no autorizadas.
+ */
 test("el circuito rechaza una clave incorrecta y una fuente no autorizada", async (t) => {
-  t.mock.method(console, "error", /* Oculta las aserciones que deben fallar durante la prueba negativa. */ () => {});
+  t.mock.method(console, "error", /* Oculta las aserciones que deben fallar durante la prueba negativa. Entradas. Ningún argumento utilizado. Salida. Sin valor de retorno. Omite diagnósticos esperados del circuito. */ () => {});
   await assert.rejects(wtns.calculate({ ...fixture.inputs, publicKeyX: fixture.otherKey[0].toString(), publicKeyY: fixture.otherKey[1].toString() }, artifactPaths().wasm, { type: "mem" }, { sanityCheck: true }));
   const seed = privateKeyFromHex("24".repeat(32));
   const publicKey = await derivePublicKey(seed);
@@ -116,7 +144,11 @@ test("el circuito rechaza una clave incorrecta y una fuente no autorizada", asyn
   seed.fill(0);
 });
 
-/** Produce una prueba con el testigo real y comprueba que alterar una señal pública invalida su verificación. */
+/**
+ * Produce una prueba con el testigo real y comprueba que alterar una señal pública invalida su verificación.
+ * Entradas. Sin argumentos. Usa las entradas del fixture y altera cada señal pública.
+ * Salida. Promesa sin valor. Comprueba la prueba válida y la vinculación de sus señales.
+ */
 test("Groth16 genera y verifica una prueba real vinculada a las ocho señales públicas", { timeout: 120000 }, async () => {
   const result = await generateProof(fixture.inputs);
   assert.equal(await verifyProof(result.proof, result.publicSignals), true);
@@ -134,7 +166,11 @@ test("Groth16 genera y verifica una prueba real vinculada a las ocho señales p�
   assert.equal(await verifyProof(badProof, result.publicSignals), false);
 });
 
-/** Rechaza la mezcla de parámetros y detecta una clave de verificación alterada mediante su huella de artefacto. */
+/**
+ * Rechaza la mezcla de parámetros y detecta una clave de verificación alterada mediante su huella de artefacto.
+ * Entradas. Sin argumentos. Usa una copia temporal de los artefactos y la modifica.
+ * Salida. Promesa sin valor. Comprueba el rechazo del manifiesto o de un archivo alterado.
+ */
 test("el manifiesto detecta artefactos incompatibles o manipulados", async () => {
   const directory = await temporaryDirectory("artifacts-");
   try {
@@ -149,9 +185,13 @@ test("el manifiesto detecta artefactos incompatibles o manipulados", async () =>
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-/** Mantiene coherentes los controles públicos del adaptador con los rangos y constantes del circuito. */
+/**
+ * Mantiene coherentes los controles públicos del adaptador con los rangos y constantes del circuito.
+ * Entradas. Sin argumentos. Usa variaciones inválidas de las entradas públicas.
+ * Salida. Sin valor de retorno. Comprueba el rechazo de cadena, versión y dominio.
+ */
 test("la serialización pública rechaza cadena inválida, versión y dominio no admitidos", () => {
-  for (const chainId of ["0", (1n << 64n).toString()]) assert.throws(/* Prueba un identificador de cadena fuera del rango v1. */ () => publicSignalsFromInput({ ...fixture.inputs, chainId }));
-  assert.throws(/* Prueba una versión que no corresponde al circuito. */ () => publicSignalsFromInput({ ...fixture.inputs, protocolVersion: "2" }));
-  assert.throws(/* Prueba otro dominio de protocolo. */ () => publicSignalsFromInput({ ...fixture.inputs, protocolDomain: "0" }));
+  for (const chainId of ["0", (1n << 64n).toString()]) assert.throws(/* Prueba un identificador de cadena fuera del rango v1. Entradas. Sin argumentos. Usa un identificador fuera del rango de la cadena. Salida. Devuelve las señales si la validación termina. El caso espera una excepción. */ () => publicSignalsFromInput({ ...fixture.inputs, chainId }));
+  assert.throws(/* Prueba una versión que no corresponde al circuito. Entradas. Sin argumentos. Usa una versión de protocolo distinta. Salida. Devuelve las señales si la validación termina. El caso espera una excepción. */ () => publicSignalsFromInput({ ...fixture.inputs, protocolVersion: "2" }));
+  assert.throws(/* Prueba otro dominio de protocolo. Entradas. Sin argumentos. Usa un dominio de protocolo distinto. Salida. Devuelve las señales si la validación termina. El caso espera una excepción. */ () => publicSignalsFromInput({ ...fixture.inputs, protocolDomain: "0" }));
 });

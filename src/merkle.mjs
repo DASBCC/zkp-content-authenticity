@@ -12,14 +12,22 @@ export const EMPTY_SOURCE_LEAF = 0n;
 // El formato incluye la relación fuente-clave para reconstruir la hoja sin confiar en un valor aislado.
 const PROOF_KEYS = ["sourceId", "publicKey", "leaf", "root", "merklePathElements", "merklePathIndices"];
 
-/** Valida un identificador de fuente positivo y lo devuelve como BigInt canónico. */
+/**
+ * Valida un identificador de fuente positivo y lo devuelve como BigInt canónico.
+ * Entradas. Identificador de fuente como BigInt o texto decimal.
+ * Salida. Identificador positivo del campo como BigInt.
+ */
 function normalizeSourceId(value) {
   const sourceId = parseField(value, "sourceId");
   if (sourceId === 0n) throw new RangeError("sourceId debe ser positivo");
   return sourceId;
 }
 
-/** Valida la pareja fuente-clave y crea una copia inmutable de sus datos normalizados. */
+/**
+ * Valida la pareja fuente-clave y crea una copia inmutable de sus datos normalizados.
+ * Entradas. Objeto con sourceId y publicKey.
+ * Salida. Promesa de la fuente normalizada e inmutable.
+ */
 async function normalizeSource(value) {
   exactKeys(value, ["sourceId", "publicKey"], "fuente autorizada");
   const sourceId = normalizeSourceId(value.sourceId);
@@ -27,13 +35,21 @@ async function normalizeSource(value) {
   return Object.freeze({ sourceId, publicKey });
 }
 
-/** Ordena fuentes por su identificador numérico sin convertir valores de campo a Number. */
+/**
+ * Ordena fuentes por su identificador numérico sin convertir valores de campo a Number.
+ * Entradas. Dos fuentes con identificadores normalizados.
+ * Salida. -1, 0 o 1 según el orden numérico de sus identificadores.
+ */
 function compareSources(first, second) {
   if (first.sourceId === second.sourceId) return 0;
   return first.sourceId < second.sourceId ? -1 : 1;
 }
 
-/** Valida el conjunto completo, aplica el orden canónico y rechaza identificadores repetidos. */
+/**
+ * Valida el conjunto completo, aplica el orden canónico y rechaza identificadores repetidos.
+ * Entradas. Arreglo de fuentes con identificador y clave pública.
+ * Salida. Promesa de un arreglo normalizado y ordenado por identificador.
+ */
 async function normalizeSources(sources) {
   if (!Array.isArray(sources)) throw new TypeError("Se requiere un arreglo de fuentes autorizadas");
   if (sources.length > MERKLE_CAPACITY) throw new RangeError(`El árbol admite hasta ${MERKLE_CAPACITY} fuentes`);
@@ -48,7 +64,11 @@ async function normalizeSources(sources) {
   return result;
 }
 
-/** Localiza una fuente por su identificador y devuelve un índice de arreglo, o -1 si no existe. */
+/**
+ * Localiza una fuente por su identificador y devuelve un índice de arreglo, o -1 si no existe.
+ * Entradas. Arreglo de fuentes e identificador de búsqueda como BigInt.
+ * Salida. Índice de la fuente o -1 si no aparece.
+ */
 function findSourceIndex(sources, sourceId) {
   for (let index = 0; index < sources.length; index++) {
     if (parseField(sources[index].sourceId, "sourceId") === sourceId) return index;
@@ -56,17 +76,29 @@ function findSourceIndex(sources, sourceId) {
   return -1;
 }
 
-/** Calcula la única relación de hoja del protocolo a partir de una fuente ya normalizada. */
+/**
+ * Calcula la única relación de hoja del protocolo a partir de una fuente ya normalizada.
+ * Entradas. Fuente normalizada con identificador y coordenadas BabyJubJub.
+ * Salida. Promesa del hash de la hoja como BigInt.
+ */
 function hashNormalizedSource(source) {
   return poseidonHash([source.sourceId, source.publicKey[0], source.publicKey[1]]);
 }
 
-/** Calcula Poseidon(sourceId, publicKeyX, publicKeyY) después de validar los tres valores. */
+/**
+ * Calcula Poseidon(sourceId, publicKeyX, publicKeyY) después de validar los tres valores.
+ * Entradas. Fuente con identificador y clave pública.
+ * Salida. Promesa de la hoja Poseidon como BigInt.
+ */
 export async function createSourceLeaf(source) {
   return hashNormalizedSource(await normalizeSource(source));
 }
 
-/** Construye el árbol completo: fuentes ordenadas, posiciones vacías a cero y padres Poseidon(izquierda, derecha). */
+/**
+ * Construye el árbol de profundidad fija con hojas vacías a cero y padres Poseidon.
+ * Entradas. Arreglo de fuentes autorizadas con sus identificadores y claves públicas.
+ * Salida. Promesa de un árbol inmutable con raíz, profundidad, fuentes, hojas y niveles.
+ */
 export async function buildAuthorizedSourcesTree(sources) {
   const normalized = await normalizeSources(sources);
   const leaves = new Array(MERKLE_CAPACITY).fill(EMPTY_SOURCE_LEAF);
@@ -89,7 +121,11 @@ export async function buildAuthorizedSourcesTree(sources) {
   });
 }
 
-/** Exporta los hermanos desde la hoja hasta la raíz; 0 indica nodo izquierdo y 1 nodo derecho. */
+/**
+ * Construye una prueba Merkle desde la hoja hasta la raíz y verifica su consistencia.
+ * Entradas. Árbol de fuentes e identificador de la fuente autorizada.
+ * Salida. Promesa de la prueba con fuente, clave, hoja, raíz, hermanos y direcciones.
+ */
 export async function getSourceProof(tree, value) {
   exactKeys(tree, ["depth", "sources", "root", "leaves", "layers"], "árbol de fuentes");
   if (tree.depth !== MERKLE_DEPTH || !Array.isArray(tree.sources) || !Array.isArray(tree.layers) ||
@@ -124,7 +160,11 @@ export async function getSourceProof(tree, value) {
   return proof;
 }
 
-/** Reconstruye la hoja y la raíz; devuelve false ante datos alterados y rechaza formatos o índices inválidos. */
+/**
+ * Reconstruye la hoja y la raíz y rechaza formatos e índices inválidos.
+ * Entradas. Prueba Merkle con fuente, clave, hoja, raíz, hermanos e índices.
+ * Salida. Promesa de true si la hoja y la raíz coinciden, o false si no coinciden.
+ */
 export async function verifySourceProof(proof) {
   exactKeys(proof, PROOF_KEYS, "prueba Merkle");
   if (!Array.isArray(proof.merklePathElements) || !Array.isArray(proof.merklePathIndices) ||
@@ -146,7 +186,11 @@ export async function verifySourceProof(proof) {
   return current === root;
 }
 
-/** Incorpora una fuente nueva y devuelve otro conjunto canónico sin modificar el arreglo recibido. */
+/**
+ * Incorpora una fuente nueva y devuelve otro conjunto canónico sin modificar el arreglo recibido.
+ * Entradas. Conjunto actual y nueva fuente con identificador y clave pública.
+ * Salida. Promesa de un arreglo ordenado e inmutable con la fuente agregada.
+ */
 export async function addAuthorizedSource(sources, entry) {
   const result = await normalizeSources(sources);
   const source = await normalizeSource(entry);
@@ -157,7 +201,11 @@ export async function addAuthorizedSource(sources, entry) {
   return Object.freeze(result);
 }
 
-/** Sustituye la clave de una fuente existente y devuelve un conjunto nuevo para reconstruir la raíz. */
+/**
+ * Sustituye la clave de una fuente existente y devuelve un conjunto nuevo para reconstruir la raíz.
+ * Entradas. Conjunto actual y fuente con su identificador y nueva clave pública.
+ * Salida. Promesa de un arreglo inmutable con la clave sustituida.
+ */
 export async function updateAuthorizedSource(sources, entry) {
   const result = await normalizeSources(sources);
   const source = await normalizeSource(entry);
@@ -167,7 +215,11 @@ export async function updateAuthorizedSource(sources, entry) {
   return Object.freeze(result);
 }
 
-/** Revoca una fuente eliminándola del conjunto; el llamador debe publicar la raíz reconstruida. */
+/**
+ * Elimina una fuente existente del conjunto para reconstruir la raíz.
+ * Entradas. Conjunto actual e identificador de la fuente revocada.
+ * Salida. Promesa de un arreglo inmutable sin la fuente revocada.
+ */
 export async function revokeAuthorizedSource(sources, value) {
   const result = await normalizeSources(sources);
   const sourceId = normalizeSourceId(value);

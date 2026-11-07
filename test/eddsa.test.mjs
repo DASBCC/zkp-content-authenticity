@@ -10,7 +10,11 @@ import { generatePrivateKey, loadPrivateKey, privateKeyFromHex, savePrivateKey, 
 import { deserializeAuthorizationPackage, exportProverInputs, serializeAuthorizationPackage, signContentAuthorization, verifyContentAuthorization } from "../src/authorization.mjs";
 import { testSeed, temporaryDirectory, vector } from "./fixtures.mjs";
 
-/** Comprueba la derivación de la clave pública y la firma contra el vector de referencia. */
+/**
+ * Comprueba la derivación de la clave pública y la firma contra el vector de referencia.
+ * Entradas. Sin argumentos. Usa el vector EdDSA y su semilla de ensayo.
+ * Salida. Promesa sin valor. Compara clave y firma con el vector.
+ */
 test("deriva la clave pública y firma determinista del vector", async () => {
   assert.deepEqual((await derivePublicKey(testSeed())).map(String), vector.publicKey);
   const signature = await signAuthorizationHash(vector.signedAuthorizationHash, testSeed());
@@ -19,19 +23,31 @@ test("deriva la clave pública y firma determinista del vector", async () => {
   assert.deepEqual(await signAuthorizationHash(vector.signedAuthorizationHash, testSeed()), signature);
 });
 
-/** Altera por separado el mensaje y el escalar para exigir el rechazo de la firma. */
+/**
+ * Altera por separado el mensaje y el escalar para exigir el rechazo de la firma.
+ * Entradas. Sin argumentos. Usa el mensaje y la firma del vector con alteraciones.
+ * Salida. Promesa sin valor. Falla si se acepta un mensaje o escalar alterado.
+ */
 test("rechaza un mensaje o escalar de firma modificado", async () => {
   assert.equal(await verifyAuthorizationSignature(BigInt(vector.signedAuthorizationHash) + 1n, vector.signature, vector.publicKey), false);
   assert.equal(await verifyAuthorizationSignature(vector.signedAuthorizationHash, { ...vector.signature, S: BigInt(vector.signature.S) + 1n }, vector.publicKey), false);
 });
 
-/** Verifica que la clave de otra fuente no autentique la firma original. */
+/**
+ * Verifica que la clave de otra fuente no autentique la firma original.
+ * Entradas. Sin argumentos. Usa la firma de una fuente y la clave de otra.
+ * Salida. Promesa sin valor. Falla si la verificación acepta la clave incorrecta.
+ */
 test("rechaza una clave pública incorrecta", async () => {
   const other = await derivePublicKey(privateKeyFromHex("42".repeat(32)));
   assert.equal(await verifyAuthorizationSignature(vector.signedAuthorizationHash, vector.signature, other), false);
 });
 
-/** Comprueba la ida y vuelta por JSON y rechaza escalares mal representados. */
+/**
+ * Comprueba la ida y vuelta por JSON y rechaza escalares mal representados.
+ * Entradas. Sin argumentos. Usa la firma del vector de ensayo.
+ * Salida. Promesa sin valor. Compara la firma original con la recuperada del JSON.
+ */
 test("serializa y deserializa sin pérdida de precisión", async () => {
   const signature = await deserializeSignature(JSON.stringify(vector.signature));
   assert.equal(typeof signature.S, "bigint");
@@ -40,7 +56,11 @@ test("serializa y deserializa sin pérdida de precisión", async () => {
   await assert.rejects(deserializeSignature(JSON.stringify({ ...vector.signature, S: "01" })));
 });
 
-/** Prueba coordenadas fuera de curva o subgrupo y escalares inválidos. */
+/**
+ * Prueba coordenadas fuera de curva o subgrupo y escalares inválidos.
+ * Entradas. Sin argumentos. Usa puntos y escalares inválidos de ensayo.
+ * Salida. Promesa sin valor. Falla si se acepta alguna codificación inválida.
+ */
 test("rechaza puntos inválidos, neutros, torsión y escalares no canónicos", async () => {
   for (const point of [[0n, 0n], [0n, 1n], [0n, FIELD_MODULUS - 1n], [FIELD_MODULUS, 1n], ["01", "1"], [1n]]) {
     await assert.rejects(validatePublicKey(point));
@@ -52,7 +72,11 @@ test("rechaza puntos inválidos, neutros, torsión y escalares no canónicos", a
   await assert.rejects(normalizeSignature({ ...vector.signature, extra: true }));
 });
 
-/** Contrasta los campos exportados con los nombres y valores esperados por el circuito. */
+/**
+ * Contrasta los campos exportados con los nombres y valores esperados por el circuito.
+ * Entradas. Sin argumentos. Usa la firma, el mensaje y la clave del vector.
+ * Salida. Promesa sin valor. Comprueba los nombres y valores de Circom.
+ */
 test("exporta nombres y cadenas compatibles con EdDSAPoseidonVerifier", async () => {
   const inputs = await exportVerifierInputs(vector.signedAuthorizationHash, vector.signature, vector.publicKey);
   assert.deepEqual(inputs, {
@@ -62,7 +86,11 @@ test("exporta nombres y cadenas compatibles con EdDSAPoseidonVerifier", async ()
   await assert.rejects(exportVerifierInputs(1n, vector.signature, vector.publicKey), /inválida/);
 });
 
-/** Comprueba el tamaño, la independencia y la copia de las semillas generadas. */
+/**
+ * Comprueba el tamaño, la independencia y la copia de las semillas generadas.
+ * Entradas. Ningún argumento utilizado.
+ * Salida. Sin valor de retorno. Comprueba la longitud e independencia de las semillas.
+ */
 test("genera semillas de 32 bytes independientes", () => {
   const first = generatePrivateKey();
   const second = generatePrivateKey();
@@ -73,13 +101,21 @@ test("genera semillas de 32 bytes independientes", () => {
   assert.notDeepEqual(copy, first);
 });
 
-/** Prueba el rechazo de semillas nulas, tamaños incorrectos y texto hexadecimal inválido. */
+/**
+ * Prueba el rechazo de semillas nulas, tamaños incorrectos y texto hexadecimal inválido.
+ * Entradas. Sin argumentos. Usa semillas y textos válidos e inválidos de ensayo.
+ * Salida. Sin valor de retorno. Comprueba los rechazos del validador.
+ */
 test("valida semillas y rechaza claves PEM/EVM mal codificadas", () => {
-  for (const value of [new Uint8Array(32), new Uint8Array(31), "abc", null]) assert.throws(/* Ejecuta la validación de una semilla que debe ser rechazada. */ () => validatePrivateKey(value));
-  for (const value of ["0x" + "42".repeat(32), "AB".repeat(32), "00".repeat(32), "42".repeat(31)]) assert.throws(/* Intenta decodificar una clave de texto inválida. */ () => privateKeyFromHex(value));
+  for (const value of [new Uint8Array(32), new Uint8Array(31), "abc", null]) assert.throws(/* Ejecuta la validación de una semilla que debe ser rechazada. Entradas. Sin argumentos. Usa la semilla inválida del caso. Salida. Devuelve el resultado de la validación si termina. El caso espera una excepción. */ () => validatePrivateKey(value));
+  for (const value of ["0x" + "42".repeat(32), "AB".repeat(32), "00".repeat(32), "42".repeat(31)]) assert.throws(/* Intenta decodificar una clave de texto inválida. Entradas. Sin argumentos. Usa la representación de clave inválida del caso. Salida. Devuelve el resultado de la decodificación si termina. El caso espera una excepción. */ () => privateKeyFromHex(value));
 });
 
-/** Comprueba los archivos de claves, la carga por entorno y la protección frente a sobrescritura. */
+/**
+ * Comprueba los archivos de claves, la carga por entorno y la protección frente a sobrescritura.
+ * Entradas. Sin argumentos. Usa una carpeta temporal y una semilla de ensayo.
+ * Salida. Promesa sin valor. Comprueba persistencia, precedencia de orígenes y errores seguros.
+ */
 test("guarda y carga secretos sin sobrescribir ni aceptar fuentes ambiguas", async () => {
   const directory = await temporaryDirectory("keys-");
   try {
@@ -94,7 +130,7 @@ test("guarda y carga secretos sin sobrescribir ni aceptar fuentes ambiguas", asy
     await writeFile(path, JSON.stringify({ ...record, format: "ed25519" }));
     await assert.rejects(loadPrivateKey({ filePath: path, env: {} }), /incompatible/);
     await writeFile(path, "{confidential-invalid-json");
-    await assert.rejects(loadPrivateKey({ filePath: path, env: {} }), /* Exige un mensaje de error que no revele el contenido del archivo privado. */ (error) => error.message === "Archivo de clave inválido");
+    await assert.rejects(loadPrivateKey({ filePath: path, env: {} }), /* Exige un mensaje de error que no revele el contenido del archivo privado. Entradas. Error de lectura del archivo de clave. Salida. true si su mensaje coincide con el error público esperado. */ (error) => error.message === "Archivo de clave inválido");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -105,7 +141,11 @@ const input = { contentHash: vector.contentHashes[62], ...vector.operation };
 // Valores de confianza que el verificador recibe por separado del paquete firmado.
 const expected = { contentHash: input.contentHash, operation: vector.operation, publicKey: vector.publicKey };
 
-/** Valida la autorización con datos esperados y una clave de confianza suministrados por separado. */
+/**
+ * Valida la autorización con datos esperados y una clave de confianza suministrados por separado.
+ * Entradas. Sin argumentos. Usa autorización, operación y clave pública de ensayo.
+ * Salida. Promesa sin valor. Comprueba la validación y el rechazo de datos ajenos.
+ */
 test("el paquete se verifica contra la fuente y operación de confianza", async () => {
   const signed = await signContentAuthorization(input, testSeed());
   const restored = await deserializeAuthorizationPackage(await serializeAuthorizationPackage(signed));
@@ -120,7 +160,11 @@ test("el paquete se verifica contra la fuente y operación de confianza", async 
   await assert.rejects(verifyContentAuthorization(restored, { ...expected, operation: { ...vector.operation, contentHash: input.contentHash } }), /estructura/);
 });
 
-/** Modifica el paquete y exige que se detecten las inconsistencias entre sus datos y huellas. */
+/**
+ * Modifica el paquete y exige que se detecten las inconsistencias entre sus datos y huellas.
+ * Entradas. Sin argumentos. Usa paquetes con valores inconsistentes o números JSON.
+ * Salida. Promesa sin valor. Falla si se admite un paquete inválido.
+ */
 test("rechaza paquetes inconsistentes y números JSON", async () => {
   const record = JSON.parse(await serializeAuthorizationPackage(await signContentAuthorization(input, testSeed())));
   for (const key of ["authorizationHash", "operationContext", "signedAuthorizationHash", "nonce"]) {
@@ -134,13 +178,17 @@ test("rechaza paquetes inconsistentes y números JSON", async () => {
   await assert.rejects(deserializeAuthorizationPackage(JSON.stringify({ ...record, secret: "no" })), /estructura/);
 });
 
-/** Comprueba que las entradas del circuito usen texto decimal y no incluyan la semilla privada. */
+/**
+ * Comprueba que las entradas del circuito usen texto decimal y no incluyan la semilla privada.
+ * Entradas. Sin argumentos. Usa un paquete firmado de ensayo.
+ * Salida. Promesa sin valor. Comprueba el contenido exportado al generador.
+ */
 test("el generador de pruebas recibe firma y datos auxiliares, sin semilla privada", async () => {
   const inputs = await exportProverInputs(await signContentAuthorization(input, testSeed()));
   assert.equal(inputs.M, vector.signedAuthorizationHash);
   assert.equal(inputs.authorizationHash, vector.authorizationHash);
   assert.equal(inputs.operationContext, vector.operationContext);
   assert.equal(inputs.registrant, BigInt(vector.operation.context.registrant).toString());
-  assert.ok(Object.values(inputs).every(/* Exige que cada entrada sea una cadena decimal canónica. */ (value) => typeof value === "string" && /^(0|[1-9][0-9]*)$/.test(value)));
+  assert.ok(Object.values(inputs).every(/* Exige que cada entrada sea una cadena decimal canónica. Entradas. Valor de una entrada para el circuito. Salida. true si es una cadena decimal canónica. */ (value) => typeof value === "string" && /^(0|[1-9][0-9]*)$/.test(value)));
   assert.doesNotMatch(JSON.stringify(inputs), /private|seed/i);
 });

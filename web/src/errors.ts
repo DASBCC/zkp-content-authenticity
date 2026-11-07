@@ -15,11 +15,19 @@ const MESSAGES: Record<string, string> = {
 
 /** Mantiene código y mensaje públicos para diferenciar fallas operativas de resultados negativos. */
 export class ApplicationError extends Error {
-  /** Asocia una clasificación pública con un mensaje comprensible para la interfaz. */
+  /**
+   * Asocia una clasificación pública con un mensaje comprensible para la interfaz.
+   * Entradas. Código de error y mensaje público opcional.
+   * Salida. Instancia de ApplicationError con un mensaje explícito o predefinido.
+   */
   constructor(public code: string, message?: string) { super(message ?? MESSAGES[code] ?? "No se pudo completar la operación."); }
 }
 
-/** Recupera únicamente clasificaciones conocidas de errores anidados de viem o del proveedor. */
+/**
+ * Recupera únicamente clasificaciones conocidas de errores anidados de viem o del proveedor.
+ * Entradas. Valor de error desconocido, incluido un posible error anidado.
+ * Salida. Texto público apropiado para la interfaz.
+ */
 export function errorMessage(error: unknown): string {
   const pending: unknown[] = [error];
   const visited = new Set<object>();
@@ -30,7 +38,7 @@ export function errorMessage(error: unknown): string {
     const item = current as { code?: number | string; name?: string; message?: string; shortMessage?: string; details?: string; data?: { errorName?: string }; cause?: unknown; error?: unknown; originalError?: unknown };
     if (item instanceof ApplicationError) return item.message;
     if (item.code === 4001 || item.name === "UserRejectedRequestError") return "La operación fue rechazada en la wallet. Puedes volver a intentarlo.";
-    const detail = [item.message, item.shortMessage, item.details].filter(/* Examina únicamente textos de diagnóstico sin mostrarlos en la interfaz. */ (value) => typeof value === "string").join(" ");
+    const detail = [item.message, item.shortMessage, item.details].filter(/* Examina únicamente textos de diagnóstico sin mostrarlos en la interfaz. Entradas. Campo desconocido del error. Salida. true si el campo es texto de diagnóstico. */ (value) => typeof value === "string").join(" ");
     if (item.name?.includes("InsufficientFunds") || /insufficient funds/i.test(detail)) return "La wallet no tiene saldo suficiente para pagar el gas de la red seleccionada.";
     if (item.name === "GasLimitTooHighError" || /gas(?: limit)?(?: is)? too high|exceeds (?:the )?(?:block|transaction) gas limit|gas limit exceeds/i.test(detail)) return "El límite de gas solicitado supera el permitido por la red. Vuelve a intentar el despliegue para calcularlo de nuevo.";
     if (item.name === "FeeCapTooHighError" || /max fee per gas.*too high|gas price.*too high/i.test(detail)) return "La comisión por unidad de gas es demasiado alta. Revisa la comisión propuesta en MetaMask antes de volver a intentar.";
@@ -41,5 +49,9 @@ export function errorMessage(error: unknown): string {
   return "No se pudo completar la operación. Comprueba el servicio, el nodo y la configuración de la wallet.";
 }
 
-/** Acorta un identificador público solo para presentarlo; nunca cambia el valor usado en las operaciones. */
+/**
+ * Abrevia identificadores públicos para mostrarlos en espacios reducidos.
+ * Entradas. Texto y número opcional de caracteres conservados en cada extremo.
+ * Salida. Texto original si cabe o texto abreviado con puntos suspensivos.
+ */
 export function short(value: string, size = 8) { return value.length > size * 2 + 3 ? value.slice(0, size) + "…" + value.slice(-size) : value; }

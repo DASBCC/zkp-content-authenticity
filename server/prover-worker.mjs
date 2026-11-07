@@ -8,10 +8,18 @@ import { buildAuthorizedSourcesTree, getSourceProof } from "../src/merkle.mjs";
 import { generateNonce } from "../src/protocol.mjs";
 import { createProofInputs, generateProof } from "../src/zkp.mjs";
 
-/** Publica únicamente el nombre de una etapa que realmente comienza a ejecutarse. */
+/**
+ * Publica únicamente el nombre de una etapa que realmente comienza a ejecutarse.
+ * Entradas. Nombre público de la etapa del prover.
+ * Salida. Sin valor de retorno. Envía un mensaje de progreso por IPC.
+ */
 function stage(value) { process.send({ type: "stage", stage: value }); }
 
-/** Ejecuta la autorización aprobada y limpia la copia administrada de la semilla al terminar. */
+/**
+ * Ejecuta la autorización aprobada y limpia la copia administrada de la semilla al terminar.
+ * Entradas. Rutas de clave y fuentes, identificador de fuente, operación y raíz esperada.
+ * Salida. Promesa sin valor. Publica por IPC la prueba pública o un código de error.
+ */
 async function run(workerData) {
   let seed;
   try {

@@ -4,7 +4,11 @@ import type { ChangeEvent, DragEvent, ReactNode } from "react";
 import type { Configuration, ContentRecord } from "./types.ts";
 import { short } from "./errors.ts";
 
-/** Dibuja iconos propios con trazos SVG sin dependencias gráficas externas. */
+/**
+ * Dibuja iconos propios con trazos SVG sin dependencias gráficas externas.
+ * Entradas. Nombre del icono y tamaño opcional, de 20 por defecto.
+ * Salida. Elemento SVG para mostrar el icono.
+ */
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
     home: <><path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/></>,
@@ -23,35 +27,75 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] ?? paths.info}</svg>;
 }
 
-/** Muestra una notificación cuyo tono distingue éxito, información y falla operativa. */
+/**
+ * Muestra una notificación cuyo tono distingue éxito, información y falla operativa.
+ * Entradas. Contenido y tipo opcional de aviso, informativo por defecto.
+ * Salida. Elemento React con el estilo correspondiente al aviso.
+ */
 export function Notice({ children, kind = "info" }: { children: ReactNode; kind?: "info" | "success" | "error" }) {
   return <div className={"notice " + kind} role={kind === "error" ? "alert" : "status"}><Icon name={kind === "success" ? "check" : "info"}/><div>{children}</div></div>;
 }
 
-/** Presenta un identificador completo con ajuste de línea y acceso directo a copiar su valor público. */
+/**
+ * Presenta un identificador completo con ajuste de línea y acceso directo a copiar su valor público.
+ * Entradas. Etiqueta e identificador público como texto.
+ * Salida. Elemento React con el valor y un botón para copiarlo.
+ */
 export function Value({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
-  /** Copia el identificador sin alterar su codificación original. */
+  /**
+   * Copia el identificador sin alterar su codificación original.
+   * Entradas. Sin argumentos. Usa el texto recibido por el componente.
+   * Salida. Promesa sin valor. Escribe el texto en el portapapeles y marca la copia.
+   */
   async function copy() { await navigator.clipboard.writeText(value); setCopied(true); }
   return <div className="value"><span>{label}</span><div><code>{value}</code><button className="copy" type="button" onClick={copy} aria-label={"Copiar " + label}>{copied ? "Copiado" : "Copiar"}</button></div></div>;
 }
 
-/** Permite seleccionar o arrastrar multimedia y mantiene la previsualización exclusivamente en memoria local. */
+/**
+ * Permite seleccionar o arrastrar multimedia y mantiene la previsualización exclusivamente en memoria local.
+ * Entradas. Archivo actual o null, callback de selección e indicador opcional de bloqueo.
+ * Salida. Elemento React con zona de selección y vista previa.
+ */
 export function FilePicker({ file, onFile, disabled = false }: { file: File | null; onFile: (file: File) => void; disabled?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState("");
   const [dragging, setDragging] = useState(false);
-  /** Libera cada URL temporal cuando se sustituye el archivo o se desmonta el control. */
-  useEffect(() => { if (!file) { setPreview(""); return; } const url = URL.createObjectURL(file); setPreview(url); return () => URL.revokeObjectURL(url); }, [file]);
-  /** Entrega el primer archivo del selector manteniendo sus bytes originales. */
+  /**
+   * Libera cada URL temporal cuando se sustituye el archivo o se desmonta el control.
+   * Entradas. Sin argumentos. Usa el archivo seleccionado.
+   * Salida. Función de limpieza cuando crea una URL o undefined si no hay archivo.
+   */
+  useEffect(() => { if (!file) { setPreview(""); return; } const url = URL.createObjectURL(file); setPreview(url); return /* Libera la vista previa anterior. Entradas. Sin argumentos. Usa la URL del archivo del cierre. Salida. Sin valor de retorno. Revoca la URL temporal. */ () => URL.revokeObjectURL(url); }, [file]);
+  /**
+   * Entrega el primer archivo del selector manteniendo sus bytes originales.
+   * Entradas. Evento de cambio del selector nativo de archivos.
+   * Salida. Sin valor de retorno. Entrega el primer archivo si está presente.
+   */
   function selected(event: ChangeEvent<HTMLInputElement>) { if (event.target.files?.[0]) onFile(event.target.files[0]); }
-  /** Abre el selector nativo desde un botón operable con teclado. */
+  /**
+   * Abre el selector nativo desde un botón operable con teclado.
+   * Entradas. Sin argumentos. Usa la referencia al selector nativo.
+   * Salida. Sin valor de retorno. Solicita abrir el selector.
+   */
   function choose() { input.current?.click(); }
-  /** Acepta un archivo arrastrado sin subirlo al servidor. */
+  /**
+   * Acepta un archivo arrastrado sin subirlo al servidor.
+   * Entradas. Evento de arrastre con los archivos soltados.
+   * Salida. Sin valor de retorno. Entrega el primer archivo si el selector está habilitado.
+   */
   function dropped(event: DragEvent) { event.preventDefault(); setDragging(false); if (!disabled && event.dataTransfer.files[0]) onFile(event.dataTransfer.files[0]); }
-  /** Marca la zona de destino mientras un archivo pasa sobre ella. */
+  /**
+   * Marca la zona de destino mientras un archivo pasa sobre ella.
+   * Entradas. Evento de arrastre sobre la zona.
+   * Salida. Sin valor de retorno. Marca la zona si admite archivos.
+   */
   function drag(event: DragEvent) { event.preventDefault(); if (!disabled) setDragging(true); }
-  /** Restablece el estilo al abandonar la zona de destino. */
+  /**
+   * Restablece el estilo al abandonar la zona de destino.
+   * Entradas. Ningún argumento.
+   * Salida. Sin valor de retorno. Limpia el estado visual de arrastre.
+   */
   function leave() { setDragging(false); }
   return <div className={"file-picker " + (dragging ? "dragging" : "")} onDragOver={drag} onDragLeave={leave} onDrop={dropped}>
     <input ref={input} aria-label="Seleccionar archivo multimedia" type="file" accept="image/*,audio/*,video/*" onChange={selected} disabled={disabled}/>
@@ -62,7 +106,11 @@ export function FilePicker({ file, onFile, disabled = false }: { file: File | nu
   </div>;
 }
 
-/** Muestra el significado de una consulta positiva o negativa sin atribuir veracidad semántica al archivo. */
+/**
+ * Muestra el significado de una consulta positiva o negativa sin atribuir veracidad semántica al archivo.
+ * Entradas. Registro consultado, huella y configuración de red.
+ * Salida. Elemento React con el resultado de la consulta y los datos públicos disponibles.
+ */
 export function RecordView({ record, hash, config }: { record: ContentRecord; hash: string; config: Configuration }) {
   return <section className={"result-card " + (record.exists ? "found" : "not-found")} aria-live="polite">
     <div className="result-heading"><span className="result-icon"><Icon name={record.exists ? "shield" : "search"} size={26}/></span><div><span className="eyebrow">RESULTADO DE LA CONSULTA</span><h2>{record.exists ? "Registro encontrado" : "Sin registro"}</h2></div></div>

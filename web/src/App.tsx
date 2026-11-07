@@ -12,19 +12,39 @@ import { Admin } from "./Admin.tsx";
 // Las rutas corresponden a tareas del usuario; su selección también permite volver con el navegador.
 const NAV = [{ id: "inicio", label: "Inicio", icon: "home" }, { id: "registrar", label: "Registrar contenido", icon: "upload" }, { id: "verificar", label: "Verificar contenido", icon: "search" }, { id: "administracion", label: "Administración", icon: "settings" }, { id: "funcionamiento", label: "Cómo funciona", icon: "book" }];
 
-/** Explica las garantías del sistema con relaciones concretas y sin atribuir detección forense al protocolo. */
+/**
+ * Explica las garantías del sistema con relaciones concretas y sin atribuir detección forense al protocolo.
+ * Entradas. Sin propiedades.
+ * Salida. Vista React que explica las garantías y los límites del sistema.
+ */
 function About() {
   const items = [{ n: "01", title: "Integridad del archivo", text: "Poseidon calcula una huella de los bytes exactos. Cambiar el contenido, los metadatos o la codificación cambia la huella." }, { n: "02", title: "Autorización de fuente", text: "EdDSA/BabyJubJub vincula la autorización de una fuente admitida con el archivo, la cuenta, la cadena y el contrato." }, { n: "03", title: "Prueba de conocimiento cero", text: "Groth16 demuestra firma y pertenencia Merkle sin publicar la identidad de la fuente, su firma ni su ruta." }, { n: "04", title: "Registro y consulta", text: "El contrato verifica la prueba y consume la autorización. Las consultas posteriores recalculan la huella y leen el registro." }];
-  return <><div className="page-title"><span className="eyebrow">DEL ARCHIVO A LA EVIDENCIA</span><h1>Cómo funciona Traza</h1><p>Cuatro relaciones distintas para una evidencia que puedes comprobar.</p></div><div className="about-grid">{items.map(/* Describe cada relación sin confundirla con la veracidad de una escena. */ (item) => <section className="panel" key={item.n}><span className="section-number">{item.n}</span><h2>{item.title}</h2><p>{item.text}</p></section>)}</div><section className="panel limits"><Icon name="info" size={28}/><h2>Un registro de autorización, no un detector universal.</h2><p>El sistema no determina si una escena ocurrió, si un contenido fue generado por IA ni si constituye un deepfake. Un resultado negativo indica ausencia de registro, y un error de conexión significa que no pudo completarse la consulta.</p><p>La confianza depende del conjunto de fuentes aprobado y de su administración. La privacidad criptográfica no elimina metadatos ni otras formas de correlación. El servicio de firma y prover conoce los datos privados; el archivo original permanece en tu dispositivo.</p><details className="technical"><summary>Parámetros del protocolo y seguridad</summary><p>Poseidon, EdDSA/BabyJubJub y Groth16 sobre BN254. Árbol de profundidad 8, capacidad 256, hojas ordenadas por identificador, posiciones vacías cero y padres Poseidon(izquierda, derecha).</p><p>Ocho señales públicas: contentHash, protocolVersion, authorizedSourcesRoot, nullifier, registrant, chainId, registryAddress y protocolDomain. La semilla EdDSA no forma parte del testigo.</p><p>El nullifier vincula fuente, nonce aleatorio de 248 bits, versión, cadena y registro. El contrato impide reutilizarlo y exige que el registrante coincida con quien envía la transacción. Una raíz revocada no acepta nuevos registros y conserva los históricos.</p><p>El setup local tiene un participante y es exclusivamente de desarrollo. Una infraestructura de producción requiere una ceremonia y una política de fuentes adecuadas.</p></details></section></>;
+  return <><div className="page-title"><span className="eyebrow">DEL ARCHIVO A LA EVIDENCIA</span><h1>Cómo funciona Traza</h1><p>Cuatro relaciones distintas para una evidencia que puedes comprobar.</p></div><div className="about-grid">{items.map(/* Describe cada relación sin confundirla con la veracidad de una escena. Entradas. Ficha con número, título y explicación de una relación. Salida. Sección React con la explicación. */ (item) => <section className="panel" key={item.n}><span className="section-number">{item.n}</span><h2>{item.title}</h2><p>{item.text}</p></section>)}</div><section className="panel limits"><Icon name="info" size={28}/><h2>Un registro de autorización, no un detector universal.</h2><p>El sistema no determina si una escena ocurrió, si un contenido fue generado por IA ni si constituye un deepfake. Un resultado negativo indica ausencia de registro, y un error de conexión significa que no pudo completarse la consulta.</p><p>La confianza depende del conjunto de fuentes aprobado y de su administración. La privacidad criptográfica no elimina metadatos ni otras formas de correlación. El servicio de firma y prover conoce los datos privados; el archivo original permanece en tu dispositivo.</p><details className="technical"><summary>Parámetros del protocolo y seguridad</summary><p>Poseidon, EdDSA/BabyJubJub y Groth16 sobre BN254. Árbol de profundidad 8, capacidad 256, hojas ordenadas por identificador, posiciones vacías cero y padres Poseidon(izquierda, derecha).</p><p>Ocho señales públicas: contentHash, protocolVersion, authorizedSourcesRoot, nullifier, registrant, chainId, registryAddress y protocolDomain. La semilla EdDSA no forma parte del testigo.</p><p>El nullifier vincula fuente, nonce aleatorio de 248 bits, versión, cadena y registro. El contrato impide reutilizarlo y exige que el registrante coincida con quien envía la transacción. Una raíz revocada no acepta nuevos registros y conserva los históricos.</p><p>El setup local tiene un participante y es exclusivamente de desarrollo. Una infraestructura de producción requiere una ceremonia y una política de fuentes adecuadas.</p></details></section></>;
 }
 
-/** Presenta las acciones principales y la disponibilidad real de la infraestructura conectada. */
+/**
+ * Presenta las acciones principales y la disponibilidad real de la infraestructura conectada.
+ * Entradas. Configuración pública y función de navegación.
+ * Salida. Vista React de inicio con acciones de registro, verificación y administración.
+ */
 function Home({ config, navigate }: { config: Configuration; navigate: (page: string) => void }) {
-  /** Abre el registro de contenido. */
+  /**
+   * Abre el registro de contenido.
+   * Entradas. Sin argumentos. Usa la función navigate del componente.
+   * Salida. Sin valor de retorno. Abre la pantalla de registro.
+   */
   function register() { navigate("registrar"); }
-  /** Abre la consulta pública de archivos. */
+  /**
+   * Abre la consulta pública de archivos.
+   * Entradas. Sin argumentos. Usa la función navigate del componente.
+   * Salida. Sin valor de retorno. Abre la pantalla de verificación.
+   */
   function verify() { navigate("verificar"); }
-  /** Abre la preparación y administración del sistema. */
+  /**
+   * Abre la preparación y administración del sistema.
+   * Entradas. Sin argumentos. Usa la función navigate del componente.
+   * Salida. Sin valor de retorno. Abre la pantalla de administración.
+   */
   function administer() { navigate("administracion"); }
   return <><div className="home-heading"><span className="eyebrow">AUTENTICIDAD MULTIMEDIA · PROTOCOLO v{config.protocolVersion}</span><h1>Cada archivo.<br/>Una traza verificable.</h1><p>Vincula tus archivos con evidencia criptográfica de una fuente autorizada. Comprueba su registro, byte por byte.</p><div className="hero-actions"><button className="button primary" onClick={register}>Registrar contenido <Icon name="arrow"/></button><button className="button secondary" onClick={verify}>Verificar un archivo <Icon name="search"/></button></div><div className="hero-art" aria-hidden="true"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="orbit orbit-three"/><div className="art-document"><span/><span/><span/><div><Icon name="shield" size={58}/></div></div><div className="art-chip chip-a"><Icon name="file"/> BYTES EXACTOS</div><div className="art-chip chip-b"><span className="status-dot"/> PRUEBA VERIFICABLE</div><div className="art-spark">✳</div></div></div>
     <div className="facts"><div><Icon name="shield"/><span>EdDSA + Poseidon<strong>Autorización criptográfica</strong></span></div><div><Icon name="link"/><span>Groth16 + Merkle<strong>Prueba privada de pertenencia</strong></span></div><div><Icon name="search"/><span>Consulta pública<strong>Sin wallet ni nueva ZKP</strong></span></div></div>
@@ -32,7 +52,11 @@ function Home({ config, navigate }: { config: Configuration; navigate: (page: st
     <div className="trust-strip"><Icon name="info"/><p>La evidencia acredita una autorización sobre unos bytes. La interpretación y veracidad del contenido requieren otras comprobaciones.</p><span>INVESTIGACIÓN APLICADA</span></div></>;
 }
 
-/** Mantiene una configuración central y escucha los cambios de cuenta o red de la wallet. */
+/**
+ * Mantiene una configuración central y escucha los cambios de cuenta o red de la wallet.
+ * Entradas. Sin propiedades. Usa la URL, las preferencias y el proveedor del navegador.
+ * Salida. Vista React que contiene la navegación, la wallet y la pantalla activa.
+ */
 export default function App() {
   const [page, setPage] = useState(window.location.hash.slice(1) || "inicio");
   const [config, setConfig] = useState<Configuration>();
@@ -42,37 +66,85 @@ export default function App() {
   const [connecting, setConnecting] = useState(false);
   const [localAccounts, setLocalAccounts] = useState<Address[]>([]);
 
-  /** Actualiza la información pública a partir del despliegue y el contrato efectivos. */
+  /**
+   * Actualiza la información pública a partir del despliegue y el contrato efectivos.
+   * Entradas. Sin argumentos. Usa la red seleccionada al iniciar la consulta.
+   * Salida. Promesa sin valor. Actualiza la configuración o el error si la red sigue seleccionada.
+   */
   async function refresh() { const target = getSelectedNetwork(); try { const next = await getConfiguration(target); if (getSelectedNetwork() === target) { setConfig(next); setError(""); } } catch (failure) { if (getSelectedNetwork() === target) setError(errorMessage(failure)); } }
-  /** Cambia el servicio de red y descarta estados de la cuenta de laboratorio antes de salir de localhost. */
+  /**
+   * Cambia el servicio de red y descarta estados de la cuenta de laboratorio antes de salir de localhost.
+   * Entradas. Evento del selector de red con el nombre de la nueva red.
+   * Salida. Promesa sin valor. Cambia de servicio y actualiza la configuración visible.
+   */
   async function changeSelectedNetwork(event: React.ChangeEvent<HTMLSelectElement>) { const target = event.target.value; const laboratory = usingLocalWallet(); selectNetwork(target); setNetwork(target); setConfig(undefined); setLocalAccounts([]); if (laboratory) setWallet(undefined); await refresh(); }
-  /** Cambia de pantalla y conserva una URL navegable. */
+  /**
+   * Cambia de pantalla y conserva una URL navegable.
+   * Entradas. Identificador de la pantalla de destino.
+   * Salida. Sin valor de retorno. Actualiza la vista, el fragmento de URL y el desplazamiento.
+   */
   function navigate(value: string) { window.location.hash = value; setPage(value); window.scrollTo({ top: 0 }); }
-  /** Conecta la wallet elegida sin enviar claves privadas al servicio. */
+  /**
+   * Conecta la wallet elegida sin enviar claves privadas al servicio.
+   * Entradas. Sin argumentos. Usa el proveedor de wallet del navegador.
+   * Salida. Promesa sin valor. Guarda la cuenta conectada o muestra un error.
+   */
   async function connect() { disconnectWallet(); setWallet(undefined); setLocalAccounts([]); setConnecting(true); setError(""); try { setWallet(await connectWallet()); } catch (failure) { setError(errorMessage(failure)); } finally { setConnecting(false); } }
-  /** Descarta el acceso de la aplicación a la cuenta activa sin modificar su wallet. */
+  /**
+   * Descarta el acceso de la aplicación a la cuenta activa sin modificar su wallet.
+   * Entradas. Sin argumentos. Usa la sesión de wallet activa en la aplicación.
+   * Salida. Sin valor de retorno. Limpia la sesión local y la cuenta de la vista.
+   */
   function disconnect() { disconnectWallet(); setWallet(undefined); }
-  /** Habilita de manera explícita la cuenta de laboratorio disponible únicamente en el nodo local. */
+  /**
+   * Habilita de manera explícita la cuenta de laboratorio disponible únicamente en el nodo local.
+   * Entradas. Sin argumentos. Usa el servicio de laboratorio local.
+   * Salida. Promesa sin valor. Conecta la wallet experimental y carga las cuentas disponibles.
+   */
   async function local() { setConnecting(true); setError(""); try { await activateLocalWallet(); setWallet(await connectWallet()); setLocalAccounts((await api<{accounts: Address[]}>("/api/local-wallet/accounts")).accounts); } catch (failure) { setError(errorMessage(failure)); } finally { setConnecting(false); } }
-  /** Selecciona otra cuenta existente del laboratorio para ensayar roles y permisos. */
+  /**
+   * Selecciona otra cuenta existente del laboratorio para ensayar roles y permisos.
+   * Entradas. Evento del selector de cuentas con la dirección elegida.
+   * Salida. Promesa sin valor. Activa la cuenta y actualiza el estado o el error.
+   */
   async function selectLocal(event: React.ChangeEvent<HTMLSelectElement>) { try { await activateLocalWallet(event.target.value as Address); setWallet(await connectWallet()); } catch (failure) { setError(errorMessage(failure)); } }
-  /** Solicita a la wallet cambiar a la cadena de este despliegue. */
+  /**
+   * Solicita a la wallet cambiar a la cadena de este despliegue.
+   * Entradas. Sin argumentos. Usa la cadena de la configuración actual.
+   * Salida. Promesa sin valor. Solicita el cambio y actualiza la wallet o el error.
+   */
   async function changeNetwork() { if (!config) return; try { await switchNetwork(config); setWallet(await connectWallet()); } catch (failure) { setError(errorMessage(failure)); } }
 
-  /** Carga la configuración y actualiza el estado cuando cambian cuenta, cadena o navegación. */
+  /**
+   * Carga la configuración y actualiza el estado cuando cambian cuenta, cadena o navegación.
+   * Entradas. Sin argumentos. Usa la wallet, la URL y la red de la aplicación.
+   * Salida. Función de limpieza para los suscriptores registrados.
+   */
   useEffect(() => {
     void refresh();
-    /** Sincroniza la navegación del historial del navegador. */
+    /**
+     * Sincroniza la navegación del historial del navegador.
+     * Entradas. Sin argumentos. Lee el fragmento de la URL actual.
+     * Salida. Sin valor de retorno. Actualiza la página seleccionada.
+     */
     function hashChanged() { setPage(window.location.hash.slice(1) || "inicio"); }
-    /** Descarta permisos visuales al cambiar la cuenta o desconectar la wallet. */
-    function accountsChanged(...args: unknown[]) { const accounts = args[0] as Address[]; setWallet(/* Conserva únicamente una cuenta que siga disponible. */ (current) => accounts?.[0] && current ? { ...current, address: accounts[0] } : undefined); }
-    /** Refleja el identificador real informado por la wallet después de cambiar de red. */
-    function chainChanged(...args: unknown[]) { setWallet(/* Actualiza la cadena sin asumir que coincide con el despliegue. */ (current) => current ? { ...current, chainId: BigInt(args[0] as string).toString() } : undefined); }
+    /**
+     * Descarta permisos visuales al cambiar la cuenta o desconectar la wallet.
+     * Entradas. Argumentos del evento EIP-1193. El primero contiene las cuentas disponibles.
+     * Salida. Sin valor de retorno. Actualiza o descarta la cuenta mostrada.
+     */
+    function accountsChanged(...args: unknown[]) { const accounts = args[0] as Address[]; setWallet(/* Conserva únicamente una cuenta que siga disponible. Entradas. Estado anterior de la wallet. Salida. Estado actualizado con la primera cuenta o undefined si falta una cuenta o wallet. */ (current) => accounts?.[0] && current ? { ...current, address: accounts[0] } : undefined); }
+    /**
+     * Refleja el identificador real informado por la wallet después de cambiar de red.
+     * Entradas. Argumentos del evento EIP-1193. El primero contiene la cadena en hexadecimal.
+     * Salida. Sin valor de retorno. Actualiza la cadena de la wallet activa en formato decimal.
+     */
+    function chainChanged(...args: unknown[]) { setWallet(/* Actualiza la cadena sin asumir que coincide con el despliegue. Entradas. Estado anterior de la wallet. Salida. Estado con la cadena nueva o undefined si no hay wallet. */ (current) => current ? { ...current, chainId: BigInt(args[0] as string).toString() } : undefined); }
     window.addEventListener("hashchange", hashChanged); window.ethereum?.on?.("accountsChanged", accountsChanged); window.ethereum?.on?.("chainChanged", chainChanged);
-    return () => { window.removeEventListener("hashchange", hashChanged); window.ethereum?.removeListener?.("accountsChanged", accountsChanged); window.ethereum?.removeListener?.("chainChanged", chainChanged); };
+    return /* Limpia las suscripciones de la aplicación al desmontarla. Entradas. Sin argumentos. Usa los manejadores instalados por el efecto. Salida. Sin valor de retorno. Retira los suscriptores de URL y wallet. */ () => { window.removeEventListener("hashchange", hashChanged); window.ethereum?.removeListener?.("accountsChanged", accountsChanged); window.ethereum?.removeListener?.("chainChanged", chainChanged); };
   }, []);
 
-  return <div className="app-shell"><aside className="sidebar"><a className="brand" href="#inicio"><span className="brand-symbol"><Icon name="shield" size={25}/></span><span>traza<span className="brand-period">.</span><small>AUTENTICIDAD MULTIMEDIA</small></span></a><div className="nav-label">ESPACIO DE TRABAJO</div><nav aria-label="Navegación principal">{NAV.map(/* Mantiene nombres de navegación accesibles y una sola pantalla activa. */ (item) => <a key={item.id} href={"#" + item.id} className={page === item.id ? "active" : ""} aria-current={page === item.id ? "page" : undefined}><Icon name={item.icon}/>{item.label}{page === item.id && <span className="nav-dot"/>}</a>)}</nav><div className="sidebar-bottom"><div className="network-box"><span className={"status-dot " + (!config?.deploymentReady ? "pending" : "")}/><div><strong>{config?.deploymentReady ? "Registro disponible" : "Preparación pendiente"}</strong><span>{config ? config.network + " · " + config.chainId : "Conectando servicio"}</span></div></div><p>Criptografía que puedes comprobar.<br/>Evidencia que puedes consultar.</p><span className="sidebar-foot">PROYECTO DE INVESTIGACIÓN / v1</span></div></aside><div className="workspace"><header className="topbar"><div className="breadcrumb">Traza <span>/</span> {NAV.find(/* Obtiene el título de la ubicación activa. */ (item) => item.id === page)?.label ?? "Inicio"}</div><div className="wallet-actions"><select className="network-select" aria-label="Red del protocolo" value={network} onChange={changeSelectedNetwork}><option value="localhost">Red local</option><option value="amoy">Polygon Amoy</option></select>{wallet && localAccounts.length > 0 && <select className="account-select" aria-label="Cuenta experimental local" value={wallet.address} onChange={selectLocal}>{localAccounts.map(/* Permite ensayar permisos con direcciones públicas del nodo, sin copiar claves. */ (address, index) => <option key={address} value={address}>Cuenta {index + 1} · {short(address, 4)}</option>)}</select>}{wallet && <button className="text-button local-account" onClick={disconnect}>Desconectar</button>}{config?.experimental && <span className="experimental">{config.network === "amoy" ? "CLAVES DE DESARROLLO" : "EXPERIMENTAL LOCAL"}</span>}{!wallet && config?.localWalletAvailable && <button className="text-button local-account" onClick={local} disabled={connecting}>Usar cuenta experimental</button>}<button className="button wallet-button" onClick={connect} disabled={connecting}><Icon name="wallet"/>{connecting ? "Conectando…" : wallet ? short(wallet.address, 5) : "Conectar wallet"}</button></div></header><main>
+  return <div className="app-shell"><aside className="sidebar"><a className="brand" href="#inicio"><span className="brand-symbol"><Icon name="shield" size={25}/></span><span>traza<span className="brand-period">.</span><small>AUTENTICIDAD MULTIMEDIA</small></span></a><div className="nav-label">ESPACIO DE TRABAJO</div><nav aria-label="Navegación principal">{NAV.map(/* Mantiene nombres de navegación accesibles y una sola pantalla activa. Entradas. Elemento de navegación con identificador, etiqueta e icono. Salida. Enlace React con el estado de selección correspondiente. */ (item) => <a key={item.id} href={"#" + item.id} className={page === item.id ? "active" : ""} aria-current={page === item.id ? "page" : undefined}><Icon name={item.icon}/>{item.label}{page === item.id && <span className="nav-dot"/>}</a>)}</nav><div className="sidebar-bottom"><div className="network-box"><span className={"status-dot " + (!config?.deploymentReady ? "pending" : "")}/><div><strong>{config?.deploymentReady ? "Registro disponible" : "Preparación pendiente"}</strong><span>{config ? config.network + " · " + config.chainId : "Conectando servicio"}</span></div></div><p>Criptografía que puedes comprobar.<br/>Evidencia que puedes consultar.</p><span className="sidebar-foot">PROYECTO DE INVESTIGACIÓN / v1</span></div></aside><div className="workspace"><header className="topbar"><div className="breadcrumb">Traza <span>/</span> {NAV.find(/* Obtiene el título de la ubicación activa. Entradas. Elemento candidato de navegación. Salida. true si su identificador coincide con la pantalla activa. */ (item) => item.id === page)?.label ?? "Inicio"}</div><div className="wallet-actions"><select className="network-select" aria-label="Red del protocolo" value={network} onChange={changeSelectedNetwork}><option value="localhost">Red local</option><option value="amoy">Polygon Amoy</option></select>{wallet && localAccounts.length > 0 && <select className="account-select" aria-label="Cuenta experimental local" value={wallet.address} onChange={selectLocal}>{localAccounts.map(/* Permite ensayar permisos con direcciones públicas del nodo, sin copiar claves. Entradas. Dirección de cuenta local e índice en la lista. Salida. Opción React con dirección y etiqueta de cuenta. */ (address, index) => <option key={address} value={address}>Cuenta {index + 1} · {short(address, 4)}</option>)}</select>}{wallet && <button className="text-button local-account" onClick={disconnect}>Desconectar</button>}{config?.experimental && <span className="experimental">{config.network === "amoy" ? "CLAVES DE DESARROLLO" : "EXPERIMENTAL LOCAL"}</span>}{!wallet && config?.localWalletAvailable && <button className="text-button local-account" onClick={local} disabled={connecting}>Usar cuenta experimental</button>}<button className="button wallet-button" onClick={connect} disabled={connecting}><Icon name="wallet"/>{connecting ? "Conectando…" : wallet ? short(wallet.address, 5) : "Conectar wallet"}</button></div></header><main>
       {error && <Notice kind="error">{error} <button className="text-button" onClick={refresh}>Reintentar conexión</button></Notice>}
       {wallet && config && wallet.chainId !== config.chainId && <Notice kind="error">La wallet está en la cadena {wallet.chainId}. Este registro utiliza {config.chainId}. <button className="text-button" onClick={changeNetwork}>Cambiar de red</button></Notice>}
       {!config ? <div className="loading-screen"><span className="spinner"/><h1>Conectando tu espacio…</h1><p>Consultando la configuración del protocolo.</p></div> : page === "registrar" ? <Register key={config.network} config={config} account={wallet?.address}/> : page === "verificar" ? <Verify key={config.network} config={config}/> : page === "administracion" ? <Admin key={config.network + (wallet?.address ?? "public")} config={config} account={wallet?.address} refresh={refresh}/> : page === "funcionamiento" ? <About/> : <Home config={config} navigate={navigate}/>}

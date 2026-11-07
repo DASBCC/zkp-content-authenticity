@@ -23,13 +23,21 @@ const OPTIONS = {
   help: { type: "boolean" },
 } as const;
 
-/** Exige un argumento del comando antes de enviar transacciones o leer datos de autorización. */
+/**
+ * Exige un argumento del comando antes de enviar transacciones o leer datos de autorización.
+ * Entradas. Valor opcional y nombre del argumento de consola.
+ * Salida. Valor de texto requerido.
+ */
 function required(value: string | undefined, name: string): string {
   if (!value) throw new Error("Falta --" + name);
   return value;
 }
 
-/** Lee JSON y ofrece un error breve que no revela el contenido del archivo recibido. */
+/**
+ * Lee JSON y ofrece un error breve que no revela el contenido del archivo recibido.
+ * Entradas. Ruta al archivo JSON.
+ * Salida. Promesa del valor JSON analizado.
+ */
 async function readJson(filename: string) {
   try { return JSON.parse(await readFile(filename, "utf8")); }
   catch (error) {
@@ -38,7 +46,11 @@ async function readJson(filename: string) {
   }
 }
 
-/** Muestra un resultado público o crea un archivo nuevo sin sobrescribir otro resultado. */
+/**
+ * Muestra un resultado público o crea un archivo nuevo sin sobrescribir otro resultado.
+ * Entradas. Dato serializable y ruta opcional.
+ * Salida. Promesa sin valor. Imprime el JSON o lo escribe en un archivo nuevo.
+ */
 async function output(value: unknown, filename?: string) {
   const text = stringifyCrypto(value) + "\n";
   if (!filename) { process.stdout.write(text); return; }
@@ -46,7 +58,11 @@ async function output(value: unknown, filename?: string) {
   await writeFile(filename, text, { flag: "wx", mode: 0o600 });
 }
 
-/** Ejecuta desde los bytes del archivo hasta la consulta final, usando una firma y una prueba Groth16 reales. */
+/**
+ * Ejecuta desde los bytes del archivo hasta la consulta final, usando una firma y una prueba Groth16 reales.
+ * Entradas. Red, ruta del archivo multimedia y destino opcional del informe.
+ * Salida. Promesa sin valor. Despliega, registra, consulta y publica un informe.
+ */
 async function runDemo(networkName: string, filename: string, outputFile?: string) {
   const hashStart = performance.now();
   const contentHash = await calculateContentHash(filename);
@@ -87,7 +103,11 @@ async function runDemo(networkName: string, filename: string, outputFile?: strin
   }
 }
 
-/** Interpreta el comando y mantiene los datos privados de operación fuera de las salidas públicas. */
+/**
+ * Interpreta el comando y mantiene los datos privados de operación fuera de las salidas públicas.
+ * Entradas. Sin argumentos. Lee el comando y sus opciones de process.argv.
+ * Salida. Promesa sin valor. Ejecuta la operación y publica el resultado que corresponda.
+ */
 async function run() {
   const command = process.argv[2];
   const { values } = parseArgs({ args: process.argv.slice(3), options: OPTIONS, strict: true });

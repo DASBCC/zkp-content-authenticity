@@ -44,13 +44,21 @@ type ProverMessage = { type: "stage"; stage: string } | { type: "result"; result
 // El proxy nunca permite transacciones ni métodos de administración del nodo.
 const READ_METHODS = new Set(["eth_chainId", "eth_getCode", "eth_call", "eth_blockNumber", "eth_getBlockByNumber", "eth_getTransactionReceipt", "eth_getTransactionByHash", "eth_getLogs", "eth_estimateGas", "eth_gasPrice", "eth_maxPriorityFeePerGas", "web3_clientVersion"]);
 
-/** Devuelve JSON sin caché y conserva con exactitud todos los enteros criptográficos. */
+/**
+ * Devuelve JSON sin caché y conserva con exactitud todos los enteros criptográficos.
+ * Entradas. Respuesta HTTP, código de estado y dato serializable.
+ * Salida. Sin valor de retorno. Envía la respuesta JSON sin caché.
+ */
 function json(response: ServerResponse, status: number, value: unknown) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
   response.end(stringifyCrypto(value));
 }
 
-/** Lee exclusivamente JSON pequeño; rechaza subidas multimedia y cuerpos de tamaño ilimitado. */
+/**
+ * Analiza un cuerpo JSON dentro del límite de tamaño de la API.
+ * Entradas. Solicitud HTTP entrante con un cuerpo JSON limitado.
+ * Salida. Promesa del valor JSON analizado.
+ */
 async function body(request: IncomingMessage) {
   if (!request.headers["content-type"]?.startsWith("application/json")) throw new ServiceError("BAD_REQUEST", "El servicio solo recibe JSON; el archivo permanece en el navegador.", 415);
   let size = 0;
@@ -64,7 +72,11 @@ async function body(request: IncomingMessage) {
   catch { throw new ServiceError("BAD_REQUEST", "El cuerpo no es JSON válido."); }
 }
 
-/** Crea una aplicación aislable para la web y las pruebas con contratos reales. */
+/**
+ * Crea una aplicación aislable para la web y las pruebas con contratos reales.
+ * Entradas. Conexión EVM, estado operativo, origen permitido y callback de cierre opcional.
+ * Salida. Promesa de una aplicación con handle y close.
+ */
 export async function createApplication(connection: BlockchainConnection, runtime: WebRuntime, origin: string, onShutdown?: () => Promise<void>) {
   const client = await connection.viem.getPublicClient();
   const challenges = new ChallengeStore();
@@ -79,21 +91,33 @@ export async function createApplication(connection: BlockchainConnection, runtim
   let closing = false;
   const allowedHost = new URL(origin).host;
 
-  /** Exige un despliegue real antes de cualquier operación de contenido. */
+  /**
+   * Exige un despliegue real antes de cualquier operación de contenido.
+   * Entradas. Sin argumentos. Usa el estado operativo de la aplicación.
+   * Salida. Registro del despliegue activo.
+   */
   function deployment() { if (!runtime.deployment) throw new ServiceError("DEPLOYMENT_REQUIRED", "Prepara el sistema desde Administración.", 409); return runtime.deployment; }
 
-  /** Consulta el estado efectivo y diferencia una falla RPC de la ausencia de un registro. */
+  /**
+   * Consulta el estado efectivo y diferencia una falla RPC de la ausencia de un registro.
+   * Entradas. Sin argumentos. Consulta el despliegue y la conexión de la aplicación.
+   * Salida. Promesa de la configuración leída del registro en cadena.
+   */
   async function configuration() {
     try { return await readRegistryConfiguration(connection, deployment().registryAddress); }
     catch { throw new ServiceError("RPC_UNAVAILABLE", "No se pudo consultar el registro. Comprueba el nodo y el despliegue.", 503); }
   }
 
-  /** Restringe la emisión a cuentas admitidas y la administración al propietario actual del contrato. */
+  /**
+   * Restringe la emisión a cuentas admitidas y la administración al propietario actual del contrato.
+   * Entradas. Dirección de la wallet y acción que quiere ejecutar.
+   * Salida. Promesa de la dirección canónica de la cuenta autorizada. Se rechaza si falta permiso.
+   */
   async function assertPermission(address: string, action: string) {
     const canonical = canonicalAddress(address, "cuenta");
     if (action === "proof") {
       if (!runtime.signingEnabled) throw new ServiceError("SIGNING_DISABLED", "El servicio de autorización está deshabilitado.", 403);
-      if (!runtime.allowedRegistrants.some(/* Compara direcciones normalizadas sin publicar la lista de permisos. */ (item) => item.toLowerCase() === canonical)) throw new ServiceError("NOT_AUTHORIZED", "Esta cuenta no tiene permiso para solicitar autorizaciones.", 403);
+      if (!runtime.allowedRegistrants.some(/* Compara direcciones normalizadas sin publicar la lista de permisos. Entradas. Dirección de una cuenta permitida. Salida. true si coincide con la dirección solicitante. */ (item) => item.toLowerCase() === canonical)) throw new ServiceError("NOT_AUTHORIZED", "Esta cuenta no tiene permiso para solicitar autorizaciones.", 403);
     } else if (action === "bootstrap") {
       if (!local || (await bootstrapOwner(connection)).toLowerCase() !== canonical) throw new ServiceError("ADMIN_ONLY", "La preparación requiere la cuenta administradora local.", 403);
     } else if (action === "wallet-deploy") {
@@ -109,16 +133,29 @@ export async function createApplication(connection: BlockchainConnection, runtim
     return canonical as Address;
   }
 
-  /** Comprueba un permiso vinculado al cuerpo de esta solicitud y revalida su rol actual. */
+  /**
+   * Comprueba un permiso vinculado al cuerpo de esta solicitud y revalida su rol actual.
+   * Entradas. Identificador de desafío, firma, cuerpo de la operación y acción esperada.
+   * Salida. Promesa de la dirección autenticada y autorizada.
+   */
   async function authenticate(value: { challengeId: string; signature: Hex; payload: unknown }, action: string) {
     exactKeys(value, ["challengeId", "signature", "payload"], "permiso");
     const address = await challenges.consume(value.challengeId, value.signature, action, value.payload,
-      /* Verifica también wallets de contrato compatibles con el proveedor EVM. */ async (account, message, signature) => client.verifyMessage({ address: account, message, signature }));
+      /**
+       * Verifica también wallets de contrato compatibles con el proveedor EVM.
+       * Entradas. Dirección, mensaje y firma de wallet.
+       * Salida. Promesa del resultado booleano de viem.
+       */
+      async (account, message, signature) => client.verifyMessage({ address: account, message, signature }));
     await assertPermission(address, action);
     return address;
   }
 
-  /** Libera resultados vencidos y limita las solicitudes por dirección de transporte. */
+  /**
+   * Libera resultados vencidos y limita las solicitudes por dirección de transporte.
+   * Entradas. Sin argumentos. Usa los trabajos y cuotas en memoria.
+   * Salida. Sin valor de retorno. Elimina entradas vencidas o antiguas.
+   */
   function prune() {
     const now = Date.now();
     for (const [id, job] of jobs) if (job.expires < now) { job.worker?.kill(); jobs.delete(id); }
@@ -127,7 +164,11 @@ export async function createApplication(connection: BlockchainConnection, runtim
     for (const [id, session] of localSessions) if (session.expires < now) localSessions.delete(id);
   }
 
-  /** Ejecuta un trabajador a la vez y conserva solamente etapas y resultados públicos del prover. */
+  /**
+   * Ejecuta un trabajador a la vez y conserva solamente etapas y resultados públicos del prover.
+   * Entradas. Sin argumentos. Usa la cola de trabajos y el estado de cierre.
+   * Salida. Sin valor de retorno. Inicia el siguiente proceso del prover disponible.
+   */
   function pump() {
     if (running || closing) return;
     for (const [id, job] of jobs) {
@@ -137,7 +178,11 @@ export async function createApplication(connection: BlockchainConnection, runtim
       worker.send(job.snapshot);
       job.worker = worker;
       let finished = false;
-      /** Finaliza el trabajador sin imprimir datos de autorización ni errores internos. */
+      /**
+       * Finaliza el trabajador sin imprimir datos de autorización ni errores internos.
+       * Entradas. Sin argumentos. Usa el proceso y el trabajo activos.
+       * Salida. Sin valor de retorno. Libera el puesto y activa el siguiente trabajo.
+       */
       function finish() {
         if (finished) return;
         finished = true;
@@ -147,7 +192,11 @@ export async function createApplication(connection: BlockchainConnection, runtim
         if (jobs.has(id)) job.snapshot = {};
         pump();
       }
-      /** Recibe únicamente etapas conocidas o el paquete público producido por el trabajador. */
+      /**
+       * Recibe únicamente etapas conocidas o el paquete público producido por el trabajador.
+       * Entradas. Paquete IPC con progreso, prueba pública o error.
+       * Salida. Sin valor de retorno. Actualiza el trabajo y libera el proceso al terminar.
+       */
       worker.on("message", (packet) => {
         if (!packet || typeof packet !== "object") return;
         const message = packet as ProverMessage;
@@ -162,22 +211,38 @@ export async function createApplication(connection: BlockchainConnection, runtim
           finish();
         }
       });
-      /** Clasifica una falla del trabajador sin exponer su excepción o su memoria. */
+      /**
+       * Clasifica una falla del trabajador sin exponer su excepción o su memoria.
+       * Entradas. Ningún argumento utilizado.
+       * Salida. Sin valor de retorno. Marca PROVER_UNAVAILABLE y libera el puesto.
+       */
       worker.on("error", () => { job.stage = "error"; job.error = { code: "PROVER_UNAVAILABLE", message: "El servicio prover no pudo completar el trabajo." }; finish(); });
-      /** Detecta una salida prematura, incluida una cancelación solicitada por el cliente. */
+      /**
+       * Detecta una salida prematura, incluida una cancelación solicitada por el cliente.
+       * Entradas. Ningún argumento utilizado.
+       * Salida. Sin valor de retorno. Marca PROVER_UNAVAILABLE si el trabajo aún seguía activo.
+       */
       worker.on("exit", () => { if (!finished) { job.stage = "error"; job.error = { code: "PROVER_UNAVAILABLE", message: "El trabajo fue interrumpido." }; finish(); } });
       break;
     }
   }
 
-  /** Valida un token de capacidad sin permitir enumerar trabajos de otras cuentas. */
+  /**
+   * Valida un token de capacidad sin permitir enumerar trabajos de otras cuentas.
+   * Entradas. Solicitud HTTP con token Bearer e identificador de trabajo.
+   * Salida. Trabajo vigente accesible con ese token.
+   */
   function jobFor(request: IncomingMessage, id: string) {
     const job = jobs.get(id);
     if (!job || request.headers.authorization !== "Bearer " + job.token) throw new ServiceError("NOT_FOUND", "El trabajo no existe o no tienes acceso.", 404);
     return job;
   }
 
-  /** Atiende la API; devuelve false cuando la petición corresponde a un recurso de la interfaz. */
+  /**
+   * Despacha las solicitudes de la API y el proxy RPC.
+   * Entradas. Solicitud y respuesta HTTP de Node.
+   * Salida. Promesa de true si atiende la petición, o false si debe atenderla la interfaz.
+   */
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<boolean> {
     const url = new URL(request.url ?? "/", origin);
     if (!url.pathname.startsWith("/api/") && url.pathname !== "/rpc") return false;
@@ -208,14 +273,14 @@ export async function createApplication(connection: BlockchainConnection, runtim
           owner: current.owner, pendingOwner: current.pendingOwner, root: current.root, rootEnabled: current.rootEnabled, protocolVersion: current.protocolVersion, protocolDomain: current.protocolDomain });
       } else if (request.method === "GET" && url.pathname === "/api/local-wallet/accounts") {
         if (!local) throw new ServiceError("LOCAL_ONLY", "No hay cuentas experimentales en esta red.", 403);
-        json(response, 200, { accounts: (await connection.viem.getWalletClients()).map(/* Publica únicamente direcciones de cuentas de desarrollo, nunca sus claves. */ (wallet) => wallet.account.address) });
+        json(response, 200, { accounts: (await connection.viem.getWalletClients()).map(/* Publica únicamente direcciones de cuentas de desarrollo, nunca sus claves. Entradas. Cliente de wallet del nodo local. Salida. Dirección EVM pública de la cuenta. */ (wallet) => wallet.account.address) });
       } else if (request.method === "POST" && url.pathname === "/api/local-wallet/connect") {
         const value = await body(request);
         if (!local || value.experimental !== true || new URL(origin).hostname !== "127.0.0.1") throw new ServiceError("LOCAL_ONLY", "La cuenta experimental solo se habilita explícitamente en el nodo local.", 403);
         if (value.previousToken) localSessions.delete(value.previousToken);
         if (localSessions.size >= 32) throw new ServiceError("BUSY", "Hay demasiadas sesiones locales.", 429);
         const wallets = await connection.viem.getWalletClients();
-        const wallet = value.address ? wallets.find(/* Permite seleccionar solo cuentas ya existentes en el nodo de desarrollo. */ (candidate) => candidate.account.address.toLowerCase() === canonicalAddress(value.address, "cuenta experimental")) : wallets[0];
+        const wallet = value.address ? wallets.find(/* Permite seleccionar solo cuentas ya existentes en el nodo de desarrollo. Entradas. Cliente de wallet candidato. Salida. true si su dirección coincide con la cuenta local solicitada. */ (candidate) => candidate.account.address.toLowerCase() === canonicalAddress(value.address, "cuenta experimental")) : wallets[0];
         if (!wallet) throw new ServiceError("LOCAL_ONLY", "La cuenta no pertenece al nodo de desarrollo.", 403);
         const token = capability();
         localSessions.set(token, { address: wallet.account.address, expires: Date.now() + 3_600_000 });
@@ -232,7 +297,7 @@ export async function createApplication(connection: BlockchainConnection, runtim
         } else if (value.method === "personal_sign") {
           const message = hexToString(value.params?.[0]);
           if (!message.startsWith("TRAZA — Permiso para una operación\nOrigen: " + origin + "\n")) throw new ServiceError("AUTH_INVALID", "La cuenta local solo firma permisos de esta aplicación.", 403);
-          const wallet = (await connection.viem.getWalletClients()).find(/* Selecciona exclusivamente la cuenta a la que se otorgó esta sesión. */ (candidate) => candidate.account.address.toLowerCase() === session.address.toLowerCase());
+          const wallet = (await connection.viem.getWalletClients()).find(/* Selecciona exclusivamente la cuenta a la que se otorgó esta sesión. Entradas. Cliente de wallet candidato. Salida. true si coincide con la cuenta vinculada a la sesión. */ (candidate) => candidate.account.address.toLowerCase() === session.address.toLowerCase());
           if (!wallet) throw new ServiceError("LOCAL_ONLY", "La cuenta experimental ya no está disponible.", 401);
           json(response, 200, { result: await wallet.signMessage({ message }) });
         } else if (value.method === "eth_sendTransaction") {
@@ -292,14 +357,14 @@ export async function createApplication(connection: BlockchainConnection, runtim
         const address = await authenticate(value, "proof");
         exactKeys(value.payload, ["contentHash"], "contenido");
         const contentHash = parseField(value.payload.contentHash, "contentHash").toString();
-        if (jobs.size >= 32 || [...jobs.values()].filter(/* Cuenta solo trabajos que todavía requieren procesamiento. */ (job) => !["ready", "error"].includes(job.stage)).length >= 4) throw new ServiceError("BUSY", "El prover está ocupado. Inténtalo nuevamente.", 429);
+        if (jobs.size >= 32 || [...jobs.values()].filter(/* Cuenta solo trabajos que todavía requieren procesamiento. Entradas. Trabajo del prover. Salida. true si su etapa sigue activa. */ (job) => !["ready", "error"].includes(job.stage)).length >= 4) throw new ServiceError("BUSY", "El prover está ocupado. Inténtalo nuevamente.", 429);
         const current = await configuration();
         if (!current.rootEnabled) throw new ServiceError("ROOT_DISABLED", "La raíz de autorización está deshabilitada.", 409);
         if ((await queryContent(connection, deployment().registryAddress, contentHash)).exists) throw new ServiceError("DUPLICATE_CONTENT", "El archivo ya tiene un registro aceptado.", 409);
         const id = randomUUID();
         const token = capability();
         const sources = JSON.parse(await readFile(runtime.sourcesFile, "utf8"));
-        const source = sources.find(/* Elige solo una fuente aún autorizada cuya clave permanece en el servidor. */ (entry: { sourceId: string }) => entry.sourceId === runtime.sourceId && (runtime.sourceKeys?.[entry.sourceId] || runtime.sourceKeyFile)) ?? sources.find(/* Busca otra fuente local disponible después de una revocación. */ (entry: { sourceId: string }) => runtime.sourceKeys?.[entry.sourceId]);
+        const source = sources.find(/* Elige solo una fuente aún autorizada cuya clave permanece en el servidor. Entradas. Fuente candidata del conjunto actual. Salida. Valor verdadero si coincide con la fuente preferida y hay una ruta de clave configurada. */ (entry: { sourceId: string }) => entry.sourceId === runtime.sourceId && (runtime.sourceKeys?.[entry.sourceId] || runtime.sourceKeyFile)) ?? sources.find(/* Busca otra fuente local disponible después de una revocación. Entradas. Fuente candidata del conjunto actual. Salida. Ruta de clave local de esa fuente o undefined. */ (entry: { sourceId: string }) => runtime.sourceKeys?.[entry.sourceId]);
         if (!source) throw new ServiceError("SOURCE_UNAVAILABLE", "No hay una fuente con clave disponible en el conjunto actual.", 409);
         jobs.set(id, { token, address, contentHash, expires: Date.now() + JOB_TTL, stage: "queued", history: [],
           snapshot: { sourceId: source.sourceId, sourceKeyFile: runtime.sourceKeys?.[source.sourceId] ?? runtime.sourceKeyFile, sourcesFile: runtime.sourcesFile,
@@ -316,13 +381,13 @@ export async function createApplication(connection: BlockchainConnection, runtim
         const value = await body(request);
         await authenticate(value, "admin-sources");
         const sources = runtime.sourcesFile ? JSON.parse(await readFile(runtime.sourcesFile, "utf8")) : [];
-        json(response, 200, { sources: sources.map(/* Devuelve únicamente datos operativos al administrador autenticado. */ (entry: { sourceId: string; publicKey: string[] }) => ({ sourceId: entry.sourceId, publicKey: entry.publicKey, available: Boolean(runtime.sourceKeys?.[entry.sourceId] || entry.sourceId === runtime.sourceId && runtime.sourceKeyFile) })), allowedRegistrants: runtime.allowedRegistrants, signingEnabled: runtime.signingEnabled });
+        json(response, 200, { sources: sources.map(/* Devuelve únicamente datos operativos al administrador autenticado. Entradas. Fuente con identificador y clave pública. Salida. Objeto con identificador, clave pública y disponibilidad de firma. */ (entry: { sourceId: string; publicKey: string[] }) => ({ sourceId: entry.sourceId, publicKey: entry.publicKey, available: Boolean(runtime.sourceKeys?.[entry.sourceId] || entry.sourceId === runtime.sourceId && runtime.sourceKeyFile) })), allowedRegistrants: runtime.allowedRegistrants, signingEnabled: runtime.signingEnabled });
       } else if (request.method === "POST" && url.pathname === "/api/admin/policy") {
         const value = await body(request);
         await authenticate(value, "admin-policy");
         exactKeys(value.payload, ["allowedRegistrants", "signingEnabled"], "política de emisión");
         if (!Array.isArray(value.payload.allowedRegistrants) || value.payload.allowedRegistrants.length > 256 || typeof value.payload.signingEnabled !== "boolean") throw new ServiceError("BAD_REQUEST", "La política de emisión no es válida.");
-        const permitted = value.payload.allowedRegistrants.map(/* Normaliza cada cuenta admitida por el administrador. */ (address: string) => canonicalAddress(address, "registrante"));
+        const permitted = value.payload.allowedRegistrants.map(/* Normaliza cada cuenta admitida por el administrador. Entradas. Dirección EVM de una cuenta admitida. Salida. Dirección canónica en minúsculas. */ (address: string) => canonicalAddress(address, "registrante"));
         if (value.payload.signingEnabled && (!runtime.sourceKeyFile || !runtime.sourcesFile)) throw new ServiceError("SOURCE_UNAVAILABLE", "Configura una fuente antes de habilitar la emisión.", 409);
         runtime.allowedRegistrants = permitted;
         runtime.signingEnabled = value.payload.signingEnabled;
@@ -335,7 +400,7 @@ export async function createApplication(connection: BlockchainConnection, runtim
         const sourceId = parseField(value.payload.sourceId, "sourceId").toString();
         if (sourceId === "0" || !["create", "rotate", "revoke"].includes(value.payload.kind) || !runtime.sourcesFile) throw new ServiceError("BAD_REQUEST", "La operación de fuente no es válida.");
         const sources = JSON.parse(await readFile(runtime.sourcesFile, "utf8"));
-        const position = sources.findIndex(/* Localiza solo el identificador validado por el administrador. */ (entry: { sourceId: string }) => entry.sourceId === sourceId);
+        const position = sources.findIndex(/* Localiza solo el identificador validado por el administrador. Entradas. Fuente del conjunto actual. Salida. true si su identificador coincide con el solicitado. */ (entry: { sourceId: string }) => entry.sourceId === sourceId);
         if (value.payload.kind === "create" && position >= 0 || value.payload.kind !== "create" && position < 0) throw new ServiceError("SOURCE_CONFLICT", "La fuente no existe o su identificador ya está ocupado.", 409);
         const sourceKeys = { [runtime.sourceId]: runtime.sourceKeyFile, ...runtime.sourceKeys };
         if (value.payload.kind === "revoke") sources.splice(position, 1);
@@ -381,7 +446,7 @@ export async function createApplication(connection: BlockchainConnection, runtim
         await authenticate(value, "shutdown");
         if (!local || !onShutdown) throw new ServiceError("LOCAL_ONLY", "El cierre desde la aplicación solo está disponible en el entorno local.", 403);
         json(response, 200, { stopping: true });
-        setTimeout(/* Permite entregar la confirmación antes de cerrar los procesos propios. */ () => { void onShutdown(); }, 250);
+        setTimeout(/* Permite entregar la confirmación antes de cerrar los procesos propios. Entradas. Ningún argumento. Salida. Sin valor de retorno. Inicia el cierre autorizado del servicio. */ () => { void onShutdown(); }, 250);
       } else throw new ServiceError("NOT_FOUND", "La operación solicitada no existe.", 404);
     } catch (error) {
       const controlled = error instanceof ServiceError ? error : new ServiceError("REQUEST_FAILED", error instanceof TypeError || error instanceof RangeError ? "La estructura o los valores de la solicitud no son válidos." : "No se pudo completar la operación del servicio.", 400);
@@ -391,8 +456,12 @@ export async function createApplication(connection: BlockchainConnection, runtim
     return true;
   }
 
-  /** Detiene únicamente los trabajos de esta aplicación y descarta sus resultados en memoria. */
-  async function close() { closing = true; validation.close(); await Promise.all([...jobs.values()].map(/* Cierra cada trabajador activo sin escribir su testigo. */ (job) => job.worker?.kill())); jobs.clear(); plans.clear(); }
+  /**
+   * Detiene únicamente los trabajos de esta aplicación y descarta sus resultados en memoria.
+   * Entradas. Sin argumentos. Usa los trabajos, la validación y los planes activos.
+   * Salida. Promesa sin valor. Detiene los trabajadores y limpia el estado de la aplicación.
+   */
+  async function close() { closing = true; validation.close(); await Promise.all([...jobs.values()].map(/* Cierra cada trabajador activo sin escribir su testigo. Entradas. Trabajo del prover. Salida. Indicador de terminación del proceso o undefined si no hay proceso. */ (job) => job.worker?.kill())); jobs.clear(); plans.clear(); }
 
   return { handle, close };
 }

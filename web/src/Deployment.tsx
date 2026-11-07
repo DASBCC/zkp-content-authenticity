@@ -13,24 +13,44 @@ interface Plan {
   verifierTransaction?: Hash; registryTransaction?: Hash; rootTransaction?: Hash;
 }
 
-/** Conserva solo un plan público de despliegue; la fuente y sus claves permanecen en el servidor. */
+/**
+ * Construye la clave para recuperar el avance de un despliegue.
+ * Entradas. Nombre de red y dirección de la cuenta.
+ * Salida. Clave de sessionStorage específica de esa red y cuenta.
+ */
 function storageKey(network: string, account: Address) { return "traza-deployment-" + network + "-" + account.toLowerCase(); }
 
-/** Presenta tres transacciones explícitas y guarda sus referencias inmediatamente después de enviarlas. */
+/**
+ * Presenta tres transacciones explícitas y guarda sus referencias inmediatamente después de enviarlas.
+ * Entradas. Configuración pública, cuenta opcional y función para recargar la configuración.
+ * Salida. Vista React para preparar, continuar y adoptar un despliegue.
+ */
 export function Deployment({ config, account, refresh }: { config: Configuration; account?: Address; refresh: () => Promise<void> }) {
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState("");
   const [error, setError] = useState("");
-  const [plan, setPlan] = useState<Plan | undefined>(/* Recupera solo el avance de la cuenta y red conectadas. */ () => { try { return account ? JSON.parse(window.sessionStorage.getItem(storageKey(config.network, account)) || "null") ?? undefined : undefined; } catch { return undefined; } });
+  const [plan, setPlan] = useState<Plan | undefined>(/* Recupera solo el avance de la cuenta y red conectadas. Entradas. Sin argumentos. Usa la red y cuenta activas al montar. Salida. Plan recuperado de sessionStorage o undefined si no está disponible. */ () => { try { return account ? JSON.parse(window.sessionStorage.getItem(storageKey(config.network, account)) || "null") ?? undefined : undefined; } catch { return undefined; } });
 
-  /** Persiste el avance público para evitar volver a desplegar un contrato ya confirmado tras un rechazo. */
+  /**
+   * Persiste el avance público para evitar volver a desplegar un contrato ya confirmado tras un rechazo.
+   * Entradas. Plan con las referencias públicas del despliegue.
+   * Salida. Sin valor de retorno. Actualiza el componente y sessionStorage.
+   */
   function save(value: Plan) { setPlan({ ...value }); window.sessionStorage.setItem(storageKey(config.network, value.owner), JSON.stringify(value)); }
 
-  /** Comprueba una cuenta y cadena constantes en cada firma o transacción del despliegue. */
+  /**
+   * Comprueba una cuenta y cadena constantes en cada firma o transacción del despliegue.
+   * Entradas. Dirección esperada opcional. Usa la configuración de red del componente.
+   * Salida. Promesa de la dirección activa y el cliente de wallet validado.
+   */
   async function wallet(address?: Address) { return currentWallet(config, address); }
 
-  /** Ejecuta preparación, dos creaciones, publicación de raíz y adopción comprobada desde el servicio. */
+  /**
+   * Ejecuta preparación, dos creaciones, publicación de raíz y adopción comprobada desde el servicio.
+   * Entradas. Sin argumentos. Usa la cuenta, configuración y avance guardado.
+   * Salida. Promesa sin valor. Registra el avance y muestra el resultado o error del despliegue.
+   */
   async function deploy() {
     if (!account || !accepted) return;
     setBusy(true); setError("");
@@ -91,7 +111,7 @@ export function Deployment({ config, account, refresh }: { config: Configuration
 
   return <section className="panel deployment-panel"><div className="panel-heading"><Icon name="wallet"/><div><h2>Desplegar con {config.network === "amoy" ? "MetaMask en Polygon Amoy" : "tu wallet"}</h2><p>Verifier, Registry y raíz inicial: tres transacciones confirmadas por ti.</p></div></div>
     <p>La wallet conservará su clave privada y mostrará el gas antes de cada confirmación.{config.network === "amoy" && <> Necesitas POL de prueba en Amoy. Puedes obtenerlo en el <a className="text-button" href="https://faucet.polygon.technology/" target="_blank" rel="noreferrer">faucet indicado por Polygon</a>.</>}</p>
-    <label className="checkbox"><input type="checkbox" checked={accepted} onChange={/* Confirma expresamente la fuente y ceremonia de desarrollo antes de preparar el ensayo. */ (event) => setAccepted(event.target.checked)} disabled={busy}/>Usar una fuente de desarrollo y el setup experimental del proyecto en esta red.</label>
+    <label className="checkbox"><input type="checkbox" checked={accepted} onChange={/* Confirma expresamente la fuente y ceremonia de desarrollo antes de preparar el ensayo. Entradas. Evento del selector de aceptación. Salida. Sin valor de retorno. Registra el consentimiento en el componente. */ (event) => setAccepted(event.target.checked)} disabled={busy}/>Usar una fuente de desarrollo y el setup experimental del proyecto en esta red.</label>
     <button className="button primary" onClick={deploy} disabled={!account || !accepted || busy}>{busy ? "Despliegue en curso…" : plan ? "Continuar despliegue" : "Desplegar contratos con mi wallet"} <Icon name="arrow"/></button>
     {!account && <p className="helper">Abre el sitio en Chrome y pulsa Conectar wallet para utilizar MetaMask.</p>}
     {stage && <p className="processing" role="status">{busy && <span className="spinner"/>}{stage}</p>}{error && <Notice kind="error">{error}</Notice>}

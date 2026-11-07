@@ -28,13 +28,21 @@ const USAGE = {
   verify: "--input <ruta-privada.json>",
 };
 
-/** Exige una opción de texto no vacía y devuelve su valor. */
+/**
+ * Exige una opción de texto no vacía y devuelve su valor.
+ * Entradas. Opciones analizadas y nombre de la opción de texto.
+ * Salida. Valor de la opción requerida.
+ */
 function required(values, name) {
   if (!values[name]) throw new TypeError(`Falta --${name}`);
   return values[name];
 }
 
-/** Lee datos JSON sin exponer su contenido cuando el archivo tiene errores de sintaxis. */
+/**
+ * Lee datos JSON sin exponer su contenido cuando el archivo tiene errores de sintaxis.
+ * Entradas. Ruta al JSON de fuentes o de una prueba Merkle.
+ * Salida. Promesa del valor JSON analizado.
+ */
 async function readJson(filename) {
   try { return JSON.parse(await readFile(filename, "utf8")); }
   catch (error) {
@@ -43,26 +51,42 @@ async function readJson(filename) {
   }
 }
 
-/** Escribe un archivo nuevo, solicita permisos 0600 y evita sobrescribir conjuntos o rutas existentes. */
+/**
+ * Escribe un archivo nuevo, solicita permisos 0600 y evita sobrescribir conjuntos o rutas existentes.
+ * Entradas. Ruta de destino y dato serializable.
+ * Salida. Promesa sin valor. Crea un JSON privado.
+ */
 async function writeNewJson(filename, value) {
   const destination = resolve(filename);
   await mkdir(dirname(destination), { recursive: true });
   await writeFile(destination, stringifyCrypto(value) + "\n", { flag: "wx", mode: 0o600 });
 }
 
-/** Convierte el identificador decimal de la fuente a un BigInt positivo del campo. */
+/**
+ * Convierte el identificador decimal de la fuente a un BigInt positivo del campo.
+ * Entradas. Opciones analizadas con source-id.
+ * Salida. Identificador positivo como BigInt.
+ */
 function sourceIdFromOptions(values) {
   const sourceId = parseField(required(values, "source-id"), "sourceId");
   if (sourceId === 0n) throw new RangeError("sourceId debe ser positivo");
   return sourceId;
 }
 
-/** Extrae solamente la información pública de un árbol sin publicar fuentes, claves ni hermanos. */
+/**
+ * Extrae solamente la información pública de un árbol sin publicar fuentes, claves ni hermanos.
+ * Entradas. Árbol Merkle de fuentes autorizadas.
+ * Salida. Objeto con raíz, profundidad y cantidad de fuentes.
+ */
 function publicSummary(tree) {
   return { root: tree.root, depth: tree.depth, count: tree.sources.length };
 }
 
-/** Ejecuta la operación local solicitada y asigna los códigos 0, 1 o 2 según su resultado. */
+/**
+ * Despacha operaciones locales sobre el conjunto de fuentes autorizadas.
+ * Entradas. Nombre del subcomando y arreglo de argumentos de consola.
+ * Salida. Promesa sin valor. Publica el resultado o ayuda y establece 1 ante error o 2 si la prueba es inválida.
+ */
 async function run(command, args) {
   try {
     if (command === "--help") {

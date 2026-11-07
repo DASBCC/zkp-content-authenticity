@@ -22,34 +22,54 @@ export const PUBLIC_SIGNAL_NAMES = Object.freeze([
   "registrant", "chainId", "registryAddress", "protocolDomain",
 ]);
 
-/** Valida un número de un solo uso no nulo y menor que 2^248. */
+/**
+ * Valida un número de un solo uso no nulo y menor que 2^248.
+ * Entradas. Nonce candidato como BigInt o texto decimal.
+ * Salida. Nonce validado como BigInt.
+ */
 export function validateNonce(value) {
   const nonce = parseField(value, "nonce", NONCE_LIMIT);
   if (nonce === 0n) throw new RangeError("nonce debe ser distinto de cero");
   return nonce;
 }
 
-/** Genera un número de un solo uso con 248 bits aleatorios sin utilizar la clave de la fuente o de la billetera. */
+/**
+ * Genera un número de un solo uso con 248 bits aleatorios sin utilizar la clave de la fuente o de la billetera.
+ * Entradas. Ningún argumento.
+ * Salida. Nonce aleatorio no nulo como BigInt.
+ */
 export function generateNonce() {
   let nonce = 0n;
   while (nonce === 0n) nonce = bytesToBigIntBE(randomBytes(NONCE_BITS / 8));
   return nonce;
 }
 
-/** Convierte una dirección EVM canónica o su entero decimal en un valor de campo de 160 bits. */
+/**
+ * Convierte una dirección EVM canónica o su entero decimal en un valor de campo de 160 bits.
+ * Entradas. Dirección hexadecimal o entero de campo, con nombre opcional para diagnósticos.
+ * Salida. Dirección representada como BigInt de hasta 160 bits.
+ */
 export function addressToField(value, name = "address") {
   if (typeof value === "string" && value.startsWith("0x")) return BigInt(canonicalAddress(value, name));
   return parseField(value, name, ADDRESS_LIMIT);
 }
 
-/** Valida el identificador de una cadena compatible con los 64 bits definidos por el circuito v1. */
+/**
+ * Valida el identificador de una cadena compatible con los 64 bits definidos por el circuito v1.
+ * Entradas. Identificador de cadena como BigInt o texto decimal.
+ * Salida. BigInt positivo de hasta 64 bits.
+ */
 export function validateChainId(value) {
   const chainId = parseField(value, "chainId", CHAIN_ID_LIMIT);
   if (chainId === 0n) throw new RangeError("chainId debe ser positivo");
   return chainId;
 }
 
-/** Calcula Poseidon(sourceId, nonce, protocolVersion, chainId, registryAddress) para impedir el uso repetido. */
+/**
+ * Calcula Poseidon(sourceId, nonce, protocolVersion, chainId, registryAddress) para impedir el uso repetido.
+ * Entradas. Objeto con fuente, nonce, versión del protocolo, cadena y dirección del registro.
+ * Salida. Promesa del nullifier Poseidon como BigInt.
+ */
 export async function calculateNullifier(input) {
   exactKeys(input, ["sourceId", "nonce", "protocolVersion", "chainId", "registryAddress"], "nullifier input");
   const sourceId = parseField(input.sourceId, "sourceId");
@@ -60,11 +80,15 @@ export async function calculateNullifier(input) {
   ]);
 }
 
-/** Construye las ocho señales públicas en orden canónico, sin incorporar datos privados de la fuente. */
+/**
+ * Construye las ocho señales públicas en orden canónico, sin incorporar datos privados de la fuente.
+ * Entradas. Objeto con los valores de las ocho señales públicas del protocolo.
+ * Salida. Arreglo de ocho cadenas decimales en el orden que espera Circom y Solidity.
+ */
 export function publicSignalsFromInput(input) {
   if (parseField(input.protocolVersion, "protocolVersion") !== PROTOCOL_VERSION ||
       parseField(input.protocolDomain, "protocolDomain") !== PROTOCOL_DOMAIN) throw new RangeError("Versión o dominio de protocolo no admitidos");
-  return PUBLIC_SIGNAL_NAMES.map(/* Recupera una señal pública y conserva su representación decimal exacta. */ (name) => {
+  return PUBLIC_SIGNAL_NAMES.map(/* Recupera una señal pública y conserva su representación decimal exacta. Entradas. Nombre de una señal pública del protocolo. Salida. Cadena decimal con el valor validado. */ (name) => {
     const value = name === "registrant" || name === "registryAddress"
       ? addressToField(input[name], name)
       : name === "chainId" ? validateChainId(input[name]) : parseField(input[name], name);

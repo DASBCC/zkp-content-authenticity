@@ -12,7 +12,11 @@ import { wtns } from "snarkjs";
 import { exportProverInputs, signContentAuthorization } from "../src/authorization.mjs";
 import { bytes, testSeed, temporaryDirectory, vector } from "./fixtures.mjs";
 
-/** Compila el circuito de ensayo a WASM y R1CS usando rutas nativas compatibles con Windows. */
+/**
+ * Compila el circuito de ensayo a WASM y R1CS usando rutas nativas compatibles con Windows.
+ * Entradas. Carpeta de salida para los artefactos de prueba.
+ * Salida. Promesa sin valor. Escribe los artefactos WASM, R1CS y de símbolos en la carpeta indicada.
+ */
 async function compileCircuit(directory) {
   const require = createRequire(import.meta.url);
   const runner = new CircomRunner({
@@ -24,19 +28,31 @@ async function compileCircuit(directory) {
   await runner.execute(fs.readFileSync(require.resolve("circom2/circom.wasm")));
 }
 
-/** Ejecuta el CLI en otro proceso con un entorno controlado y devuelve su salida y código de terminación. */
+/**
+ * Ejecuta el CLI en otro proceso con un entorno controlado y devuelve su salida y código de terminación.
+ * Entradas. Subcomando, argumentos opcionales y variables de entorno adicionales opcionales.
+ * Salida. Resultado del proceso hijo con código y salidas de consola.
+ */
 function command(action, args = [], extraEnvironment = {}) {
   const env = { ...process.env, ...extraEnvironment };
   if (!Object.hasOwn(extraEnvironment, "SOURCE_EDDSA_PRIVATE_KEY")) delete env.SOURCE_EDDSA_PRIVATE_KEY;
   return spawnSync(process.execPath, ["scripts/crypto-cli.mjs", ...(action ? [action] : []), ...args], { encoding: "utf8", timeout: 60000, env });
 }
-/** Exige que un comando termine correctamente y devuelve el resultado para comprobar su salida. */
+/**
+ * Exige que un comando termine correctamente y devuelve el resultado para comprobar su salida.
+ * Entradas. Resultado del proceso hijo.
+ * Salida. El mismo resultado si terminó con código cero. Falla en otro caso.
+ */
 function successful(result) {
   assert.equal(result.status, 0, result.stderr || String(result.error));
   return result;
 }
 
-/** Comprueba el flujo completo del CLI, incluida la firma por entorno y el rechazo de un archivo modificado. */
+/**
+ * Comprueba el flujo completo del CLI, incluida la firma por entorno y el rechazo de un archivo modificado.
+ * Entradas. Sin argumentos. Usa un archivo multimedia y una carpeta temporal.
+ * Salida. Promesa sin valor. Comprueba las salidas de los comandos encadenados.
+ */
 test("los comandos generan claves, hash, autorización, firma, verificación y inputs", async () => {
   const directory = await temporaryDirectory("cli-");
   try {
@@ -75,7 +91,11 @@ test("los comandos generan claves, hash, autorización, firma, verificación y i
   }
 });
 
-/** Comprueba la ayuda, los comandos desconocidos y los argumentos obligatorios. */
+/**
+ * Comprueba la ayuda, los comandos desconocidos y los argumentos obligatorios.
+ * Entradas. Sin argumentos. Usa argumentos inválidos y opciones de ayuda.
+ * Salida. Sin valor de retorno. Comprueba códigos de salida y mensajes.
+ */
 test("los comandos validan argumentos y ofrecen ayuda ejecutable", () => {
   for (const action of ["hash", "keygen", "authorization", "sign", "verify"]) {
     assert.match(successful(command(action, ["--help"])).stdout, /Uso:/);
@@ -88,7 +108,11 @@ test("los comandos validan argumentos y ofrecen ayuda ejecutable", () => {
   assert.equal(command("sign", ["--file", "samples/prueba.txt", "--operation", "samples/operation.json"]).status, 1);
 });
 
-/** Genera y valida un testigo real, y exige que Circom rechace cambios de firma, mensaje o contexto. */
+/**
+ * Genera y valida un testigo real, y exige que Circom rechace cambios de firma, mensaje o contexto.
+ * Entradas. Contexto de prueba de Node para instalar un doble de consola.
+ * Salida. Promesa sin valor. Compila Circom y prueba un testigo válido y variantes alteradas.
+ */
 test("Circom acepta el testigo real y rechaza alteraciones de firma, mensaje y contexto", { timeout: 180000 }, async (t) => {
   const directory = await temporaryDirectory("circom-");
   try {
@@ -106,7 +130,7 @@ test("Circom acepta el testigo real y rechaza alteraciones de firma, mensaje y c
     // Se conserva este texto literal porque es la respuesta emitida por snarkjs.
     assert.match(checked.stdout, /WITNESS IS CORRECT/);
     assert.ok((await readFile(witness)).byteLength > 0);
-    t.mock.method(console, "error", /* Silencia los mensajes esperados al probar restricciones inválidas. */ () => {});
+    t.mock.method(console, "error", /* Silencia los mensajes esperados al probar restricciones inválidas. Entradas. Ningún argumento utilizado. Salida. Sin valor de retorno. Omite los mensajes esperados. */ () => {});
     for (const key of ["S", "M", "registrant", "chainId", "registryAddress", "protocolDomain", "authorizationHash", "operationContext"]) {
       await assert.rejects(wtns.calculate({ ...inputs, [key]: (BigInt(inputs[key]) + 1n).toString() }, wasm, { type: "mem" }));
     }

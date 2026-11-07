@@ -32,7 +32,11 @@ export interface DeploymentRecord {
   codeHashes: { verifier: Hash; registry: Hash };
 }
 
-/** Abre la red elegida y comprueba que su identificador coincide con el proveedor real. */
+/**
+ * Abre la red elegida y comprueba que su identificador coincide con el proveedor real.
+ * Entradas. Nombre de red opcional, con BLOCKCHAIN_NETWORK o localhost como alternativa.
+ * Salida. Promesa de una conexión Hardhat de capa 1 con cadena comprobada.
+ */
 export async function connectBlockchain(name = process.env.BLOCKCHAIN_NETWORK || "localhost") {
   const connection = await network.create({ network: name, chainType: "l1" });
   try {
@@ -47,27 +51,43 @@ export async function connectBlockchain(name = process.env.BLOCKCHAIN_NETWORK ||
   }
 }
 
-/** Devuelve la cuenta EVM de la red; una semilla EdDSA nunca se utiliza para firmar transacciones. */
+/**
+ * Selecciona la wallet que firma transacciones en la red activa.
+ * Entradas. Conexión Hardhat activa.
+ * Salida. Promesa del primer cliente de wallet EVM disponible.
+ */
 export async function transactionWallet(connection: BlockchainConnection) {
   const [wallet] = await connection.viem.getWalletClients();
   if (!wallet) throw new Error("Falta una cuenta EVM: configura DEPLOYER_PRIVATE_KEY o utiliza las cuentas del nodo local");
   return wallet;
 }
 
-/** Construye una instancia de consulta pública que funciona aunque no exista una cuenta de transacciones. */
+/**
+ * Construye una instancia de consulta pública que funciona aunque no exista una cuenta de transacciones.
+ * Entradas. Conexión y dirección EVM del registro.
+ * Salida. Promesa de una instancia de viem con la ABI del registro y un cliente público.
+ */
 export async function registryReader(connection: BlockchainConnection, registryAddress: string) {
   const publicClient = await connection.viem.getPublicClient();
   const artifact = await artifacts.readArtifact("ContentRegistry");
   return getContract({ address: canonicalAddress(registryAddress, "registryAddress") as Address, abi: artifact.abi, client: publicClient });
 }
 
-/** Determina el archivo del último despliegue realmente ejecutado para esta red y cadena. */
+/**
+ * Determina el archivo del último despliegue realmente ejecutado para esta red y cadena.
+ * Entradas. Conexión a la red cuyo despliegue se busca.
+ * Salida. Promesa de la ruta absoluta del JSON de despliegue.
+ */
 export async function deploymentFilename(connection: BlockchainConnection) {
   const publicClient = await connection.viem.getPublicClient();
   return path.resolve("deployments", String(await publicClient.getChainId()), connection.networkName + ".json");
 }
 
-/** Guarda el despliegue público actual y una copia histórica, sin incluir claves ni datos privados de la fuente. */
+/**
+ * Guarda el despliegue público actual y una copia histórica, sin incluir claves ni datos privados de la fuente.
+ * Entradas. Metadatos públicos del despliegue y ruta de destino opcional.
+ * Salida. Promesa de la ruta absoluta guardada. También escribe una copia histórica.
+ */
 export async function saveDeployment(record: DeploymentRecord, filename?: string) {
   const destination = path.resolve(filename ?? path.join("deployments", record.chainId, record.network + ".json"));
   await mkdir(path.dirname(destination), { recursive: true });
@@ -81,7 +101,11 @@ export async function saveDeployment(record: DeploymentRecord, filename?: string
   return destination;
 }
 
-/** Carga un despliegue real por red y contrasta las direcciones opcionales de las variables de entorno. */
+/**
+ * Carga un despliegue real por red y contrasta las direcciones opcionales de las variables de entorno.
+ * Entradas. Conexión a la cadena y ruta del JSON opcional.
+ * Salida. Promesa de un DeploymentRecord validado para la cadena actual.
+ */
 export async function loadDeployment(connection: BlockchainConnection, filename?: string): Promise<DeploymentRecord> {
   const location = filename ?? await deploymentFilename(connection);
   let record: DeploymentRecord;
@@ -102,7 +126,11 @@ export async function loadDeployment(connection: BlockchainConnection, filename?
   return record;
 }
 
-/** Despliega el verificador generado y el registro, esperando las transacciones antes de devolver direcciones reales. */
+/**
+ * Despliega el verificador generado y el registro, esperando las transacciones antes de devolver direcciones reales.
+ * Entradas. Conexión con wallet y raíz autorizada opcional.
+ * Salida. Promesa del DeploymentRecord con direcciones, transacciones y huellas del bytecode.
+ */
 export async function deployContracts(connection: BlockchainConnection, authorizedRoot?: bigint): Promise<DeploymentRecord> {
   const root = authorizedRoot === undefined ? undefined : parseField(authorizedRoot, "authorizedSourcesRoot");
   if (root === 0n) throw new Error("La raíz autorizada no puede ser cero");
@@ -135,7 +163,11 @@ export async function deployContracts(connection: BlockchainConnection, authoriz
   };
 }
 
-/** Consulta la configuración del contrato y obtiene el contexto efectivo que debe autorizar la fuente. */
+/**
+ * Consulta la configuración del contrato y obtiene el contexto efectivo que debe autorizar la fuente.
+ * Entradas. Conexión y dirección del registro desplegado.
+ * Salida. Promesa de la configuración con verificador, propietarios, raíz, cadena, versión y dominio.
+ */
 export async function readRegistryConfiguration(connection: BlockchainConnection, registryAddress: string) {
   const registry = await registryReader(connection, registryAddress);
   const publicClient = await connection.viem.getPublicClient();
@@ -148,7 +180,11 @@ export async function readRegistryConfiguration(connection: BlockchainConnection
   };
 }
 
-/** Contrasta el código del verificador, la identidad del registro y los artefactos asociados al despliegue. */
+/**
+ * Contrasta el código del verificador, la identidad del registro y los artefactos asociados al despliegue.
+ * Entradas. Conexión y metadatos del despliegue guardado.
+ * Salida. Promesa de la configuración validada con valid en true e identificador de artefactos.
+ */
 export async function checkDeployment(connection: BlockchainConnection, record: DeploymentRecord) {
   const manifest = await ensureZkArtifacts();
   if (record.artifactId !== manifest.artifactId) throw new Error("El despliegue y los artefactos Groth16 no corresponden");
@@ -166,7 +202,11 @@ export async function checkDeployment(connection: BlockchainConnection, record: 
   return { valid: true, artifactId: manifest.artifactId, ...configuration };
 }
 
-/** Crea una operación con datos leídos de la cadena y un número de un solo uso aleatorio de 248 bits. */
+/**
+ * Crea una operación con datos leídos de la cadena y un número de un solo uso aleatorio de 248 bits.
+ * Entradas. Conexión, registro, fuente, registrante opcional y nonce opcional.
+ * Salida. Promesa de una operación con versión, fuente, nonce y contexto de registro.
+ */
 export async function createRegistrationOperation(connection: BlockchainConnection, registryAddress: string, sourceId: string | bigint, registrant?: string, nonce = generateNonce()) {
   const configuration = await readRegistryConfiguration(connection, registryAddress);
   const source = parseField(sourceId, "sourceId");
@@ -179,13 +219,21 @@ export async function createRegistrationOperation(connection: BlockchainConnecti
   };
 }
 
-/** Convierte una prueba JSON a las cuatro tuplas tipadas de la interfaz Solidity. */
+/**
+ * Convierte una prueba JSON a las cuatro tuplas tipadas de la interfaz Solidity.
+ * Entradas. Prueba Groth16 y ocho señales públicas.
+ * Salida. Promesa de la tupla [pA, pB, pC, publicSignals] con valores BigInt.
+ */
 export async function proofArguments(proof: unknown, publicSignals: unknown): Promise<ProofArguments> {
   const value = await formatSolidityProof(proof, publicSignals);
   return [value.pA as Pair, value.pB as readonly [Pair, Pair], value.pC as Pair, value.publicSignals as PublicSignals];
 }
 
-/** Registra una prueba real y devuelve el gas y el tiempo de confirmación sin exponer el testigo. */
+/**
+ * Registra una prueba real y devuelve el gas y el tiempo de confirmación sin exponer el testigo.
+ * Entradas. Conexión, despliegue y paquete con prueba, señales e identificador de artefactos opcional.
+ * Salida. Promesa de un resumen con transacción, huella, bloque, tamaño de la prueba, gas y latencia.
+ */
 export async function registerProof(connection: BlockchainConnection, record: DeploymentRecord, bundle: { proof: unknown; publicSignals: unknown; artifactId?: string }) {
   await checkDeployment(connection, record);
   if (bundle.artifactId && bundle.artifactId !== record.artifactId) throw new Error("La prueba corresponde a otro conjunto de artefactos");
@@ -206,7 +254,11 @@ export async function registerProof(connection: BlockchainConnection, record: De
     verifierGasEstimate, proofAbiBytes, registrationGas: receipt.gasUsed, confirmationMs: performance.now() - start };
 }
 
-/** Ejecuta una transacción de ensayo sobre el verificador para medir su gas real por separado del registro. */
+/**
+ * Ejecuta una transacción de ensayo sobre el verificador para medir su gas real por separado del registro.
+ * Entradas. Conexión, despliegue y paquete con prueba Groth16 y señales públicas.
+ * Salida. Promesa del gas consumido por el verificador y la huella de su transacción.
+ */
 export async function measureVerifierGas(connection: BlockchainConnection, record: DeploymentRecord, bundle: { proof: unknown; publicSignals: unknown }) {
   const publicClient = await connection.viem.getPublicClient();
   const wallet = await transactionWallet(connection);
@@ -220,13 +272,21 @@ export async function measureVerifierGas(connection: BlockchainConnection, recor
   return { verifierGas: receipt.gasUsed, transactionHash: hash };
 }
 
-/** Consulta un contenido por su huella pública sin utilizar claves de fuente, testigos ni otra prueba ZKP. */
+/**
+ * Consulta un contenido por su huella pública sin utilizar claves de fuente, testigos ni otra prueba ZKP.
+ * Entradas. Conexión, dirección del registro y huella BigInt o decimal.
+ * Salida. Promesa del registro público. Su campo exists indica si se encontró.
+ */
 export async function queryContent(connection: BlockchainConnection, registryAddress: string, contentHash: bigint | string) {
   const registry = await registryReader(connection, registryAddress);
   return registry.read.getRecord([parseField(contentHash, "contentHash")]);
 }
 
-/** Recalcula la huella de un archivo multimedia y consulta si consta en el registro elegido. */
+/**
+ * Recalcula la huella de un archivo multimedia y consulta si consta en el registro elegido.
+ * Entradas. Conexión, dirección del registro y ruta del archivo local.
+ * Salida. Promesa de un objeto con la huella calculada y el registro público.
+ */
 export async function queryFile(connection: BlockchainConnection, registryAddress: string, filename: string) {
   const contentHash = await calculateContentHash(filename);
   return { contentHash, record: await queryContent(connection, registryAddress, contentHash) };
