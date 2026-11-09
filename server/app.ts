@@ -397,8 +397,17 @@ export async function createApplication(connection: BlockchainConnection, runtim
         const value = await body(request);
         const address = await authenticate(value, "admin-change");
         exactKeys(value.payload, ["kind", "sourceId"], "cambio de fuente");
-        const sourceId = parseField(value.payload.sourceId, "sourceId").toString();
-        if (sourceId === "0" || !["create", "rotate", "revoke"].includes(value.payload.kind) || !runtime.sourcesFile) throw new ServiceError("BAD_REQUEST", "La operación de fuente no es válida.");
+        const input = value.payload.sourceId;
+        let sourceId: string;
+        try {
+          const id = parseField(typeof input === "string" ? input.trim() : input, "sourceId");
+          if (id === 0n) throw new RangeError("sourceId debe ser positivo");
+          sourceId = id.toString();
+        } catch (error) {
+          if (!(error instanceof TypeError || error instanceof RangeError)) throw error;
+          throw new ServiceError("INVALID_SOURCE_ID", "Escribe un identificador entero positivo dentro del rango del protocolo y sin ceros iniciales, por ejemplo 2.");
+        }
+        if (!["create", "rotate", "revoke"].includes(value.payload.kind) || !runtime.sourcesFile) throw new ServiceError("BAD_REQUEST", "La operación de fuente no es válida.");
         const sources = JSON.parse(await readFile(runtime.sourcesFile, "utf8"));
         const position = sources.findIndex(/* Localiza solo el identificador validado por el administrador. Entradas. Fuente del conjunto actual. Salida. true si su identificador coincide con el solicitado. */ (entry: { sourceId: string }) => entry.sourceId === sourceId);
         if (value.payload.kind === "create" && position >= 0 || value.payload.kind !== "create" && position < 0) throw new ServiceError("SOURCE_CONFLICT", "La fuente no existe o su identificador ya está ocupado.", 409);

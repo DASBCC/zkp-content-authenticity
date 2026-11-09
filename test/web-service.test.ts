@@ -194,7 +194,7 @@ test("la rotación conserva su nueva clave después de incorporar otra fuente", 
 });
 
 /**
- * Impide sincronizar una raíz no publicada y conserva el registro histórico tras revocar fuentes.
+ * Exige confirmar la raíz, conserva el historial y permite crear otra fuente tras revocar todas.
  * Entradas. Sin argumentos. Usa un plan administrativo y transacciones de ensayo.
  * Salida. Promesa sin valor. Comprueba que se exige la raíz confirmada en cadena.
  */
@@ -210,6 +210,17 @@ test("la administración requiere confirmación real de la nueva raíz antes de 
   }
   assert.equal((await queryContent(connection, deployment.registryAddress, "31")).exists, true);
   assert.equal((await request("/api/proofs", await signed("proof", { contentHash: "34" }))).value.error.code, "SOURCE_UNAVAILABLE");
+
+  const invalid = await request("/api/admin/change", await signed("admin-change", { kind: "create", sourceId: "02" }));
+  assert.equal(invalid.status, 400);
+  assert.equal(invalid.value.error.code, "INVALID_SOURCE_ID");
+  const replacement = await request("/api/admin/change", await signed("admin-change", { kind: "create", sourceId: " 2 " }));
+  assert.equal(replacement.status, 200);
+  assert.equal(replacement.value.count, 1);
+  await registry.write.setAuthorizedSourcesRoot([BigInt(replacement.value.root)]);
+  assert.equal((await request("/api/admin/commit", await signed("admin-commit", { planId: replacement.value.planId }))).status, 200);
+  const current = await request("/api/admin/sources", await signed("admin-sources", {}));
+  assert.deepEqual(current.value.sources.map((source: { sourceId: string }) => source.sourceId), ["2"]);
 });
 
 /**
